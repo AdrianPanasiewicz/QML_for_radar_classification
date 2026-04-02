@@ -1,11 +1,11 @@
-from environment_classes import Radar, Drone
+from Data.environment_classes import Radar, Drone
+from scipy import constants as  cs
 
 λ = 0.02998
 default_radar = Radar(
     λ = λ,
     f_c = cs.c/λ
 )
-
 
 djimavicair2 = Drone(
     name="DJI_Mavic_Air_2",

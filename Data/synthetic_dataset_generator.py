@@ -1,6 +1,6 @@
-from environment_classes import Drone, Radar, Context
-from synthetic_signal_generator import SyntheticSignalGenerator
-from noise_models import BaseNoiseModel
+from Data.environment_classes import Drone, Radar, Context
+from Data.synthetic_signal_generator import SyntheticSignalGenerator
+from Data.noise_models import BaseNoiseModel
 from pathlib import Path
 from tqdm import tqdm
 import pickle
@@ -14,7 +14,7 @@ class DatasetMetadata:
     save_path:      Path
 
     @classmethod
-    def create_from_save_path(cls, path: Path):
+    def create_from_path(cls, path: Path):
         return cls(
             file_format=path.suffix.lstrip("."),
             filename=path.stem,

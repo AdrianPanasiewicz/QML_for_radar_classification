@@ -2,8 +2,6 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Union, Callable
 
-
-
 Scalar = Union[float, int]
 Field  = Union[Scalar, Callable[[np.ndarray], np.ndarray]]
 

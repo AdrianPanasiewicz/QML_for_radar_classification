@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from Data.
+from Data.environment_classes import Drone, Radar, Context
+from Data.synthetic_dataset_generator import DatasetMetadata
 
 class DatasetClass(ABC):
 	def __init__(self):
