@@ -1,4 +1,4 @@
-from Data.environment_classes import Radar, Drone
+from Data.Primitives.environment_classes import Radar, Drone
 from scipy import constants as  cs
 
 λ = 0.02998
@@ -46,3 +46,8 @@ djiphantom4 = Drone(
     L_2=0.05,
     f_rot=116,
 )
+
+class_map = ["DJI_Matrice_300_RTK", "DJI_Mavic_Air_2",
+             "DJI_Mavic_Mini", "DJI_Phantom_4", "Parrot_Disco"]
+
+drones_array = [djimatrice300rtk, djimavicair2, djimavicmini, djiphantom4, parrotdisco]

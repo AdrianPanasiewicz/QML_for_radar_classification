@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from Data.synthetic_dataset_generator import DatasetMetadata, DataRequest
+from Data.Generators.synthetic_dataset_generator import DatasetMetadata
 import pickle
 
 

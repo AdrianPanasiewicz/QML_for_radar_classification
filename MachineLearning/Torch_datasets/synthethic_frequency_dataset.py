@@ -1,5 +1,5 @@
 from torch.utils.data import Dataset
-from Data.synthetic_dataset_generator import DatasetMetadata
+from Data.Generators.synthetic_dataset_generator import DatasetMetadata
 from MachineLearning.Preprocessing.file_loader import SyntheticDataFileLoader
 from MachineLearning.Preprocessing.frequency_domain_parser import FrequencyDomainDataParser
 

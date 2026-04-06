@@ -1,5 +1,5 @@
-from Data.environment_classes import Drone, Radar, Context
-from Data.noise_models import AdditiveWhiteGaussianNoise
+from Data.Primitives.environment_classes import Drone, Radar, Context
+from Data.Primitives.noise_models import AdditiveWhiteGaussianNoise
 import numpy as np
 import scipy
 import sympy
@@ -109,6 +109,7 @@ class SyntheticSignalGenerator:
         else:
             return t_array, signal
 
+    @classmethod
     def apply_stft(self, signal, context):
         f, t, Zreal = scipy.signal.stft(
         signal.real, 1/context.dt, window='hamming', nperseg=32, noverlap=16, return_onesided=True)
