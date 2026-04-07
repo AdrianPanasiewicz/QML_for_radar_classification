@@ -4,6 +4,7 @@ class ClassicalNeuralNetwork(nn.Module):
 	def __init__(self, l1=500, l2=250):
 		super().__init__()
 		self.init_kwargs = {"l1": l1, "l2": l2}
+		self.model_name = self.__class__.__name__
 		self.flatten = nn.Flatten()
 		self.linear_relu_stack = nn.Sequential(
 			nn.Linear(10, l1),

@@ -3,6 +3,8 @@ from torch import nn
 class ClassicalSupportVectorMachine(nn.Module):
 	def __init__(self):
 		super().__init__()
+		self.init_kwargs = {}
+		self.model_name = self.__class__.__name__
 		self.flatten = nn.Flatten()
 		self.linear_relu_stack = nn.Sequential(
 			nn.Linear(2*16*64, 500),

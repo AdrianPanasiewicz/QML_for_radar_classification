@@ -5,6 +5,8 @@ import torch
 class QuantumNeuralNetwork(nn.Module):
     def __init__(self, n_qubits, device='default.qubit'):
         super(QuantumNeuralNetwork, self).__init__()
+        self.init_kwargs = {"n_qubits": n_qubits, "device": 'default.qubit'}
+        self.model_name = self.__class__.__name__
         self.n_qubits = n_qubits
         self.dev = qml.device(device, wires=n_qubits)
 
