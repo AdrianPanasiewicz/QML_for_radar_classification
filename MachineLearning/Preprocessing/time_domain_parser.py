@@ -9,14 +9,6 @@ import scipy
 class TimeDomainDataParser(DataParser):
 	def __init__(self):
 		super().__init__()
-		self.class_map = {
-			"noise":				0,
-			"DJI_Matrice_300_RTK":	1,
-			"DJI_Mavic_Air_2":		2,
-			"DJI_Mavic_Mini":		3,
-			"DJI_Phantom_4":		4,
-			"Parrot_Disco":			5
-		 }
 
 	def parse_data_object(self, dataset_obj, bin_size=100):
 		signal, label, misc_data = self.extract_training_data_and_label(dataset_obj)
@@ -40,7 +32,7 @@ class TimeDomainDataParser(DataParser):
 	def bin_data(self, data, bin_size=100):
 		bin_array = []
 		for i in range(data.shape[0]//bin_size):
-			bin_array.append(np.average(data[bin_size*i:bin_size*(i+1)]))
+			bin_array.append(np.average(data[bin_size*i:bin_size*(i+1)])*np.sqrt(bin_size))
 		return np.array(bin_array)
 
 	def discrete_fourier_transform(self, time_domain_data):
@@ -52,7 +44,10 @@ class TimeDomainDataParser(DataParser):
 		return modulus_data
 
 	def to_tensor(self, data):
-		return torch.from_numpy(data).float()
+		if isinstance(data, np.ndarray):
+			return torch.from_numpy(data).float()
+		else:
+			return data.float()
 
 	def encode_label(self, label):
 		return self.class_map[label]

@@ -2,6 +2,11 @@ from abc import ABC, abstractmethod
 
 class DataParser(ABC):
 	def __init__(self):
+		self.class_map = {
+			"noise":				0,
+			"DJI_Mavic_Mini":		1,
+			"Parrot_Disco":			2,
+		 }
 		pass
 
 	@abstractmethod

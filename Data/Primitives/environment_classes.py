@@ -7,16 +7,16 @@ Field  = Union[Scalar, Callable[[np.ndarray], np.ndarray]]
 
 @dataclass
 class Drone:
-    name: str
-    N: int
-    L_1: float
-    L_2: float
-    f_rot: float
+    name:    str
+    N:       int
+    L_1:     float
+    L_2:     float
+    f_rot:   float
 
 @dataclass
 class Radar:
-    λ: float
-    f_c: float
+    λ:       float
+    f_c:     float
 
 @dataclass
 class Context:

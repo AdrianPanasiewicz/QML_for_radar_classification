@@ -1,4 +1,6 @@
 from torch.utils.data import Dataset
+from torch import tensor, stack
+from torch.nn.functional import normalize
 from Data.Generators.synthetic_dataset_generator import DatasetMetadata
 from MachineLearning.Preprocessing.file_loader import SyntheticDataFileLoader
 from MachineLearning.Preprocessing.frequency_domain_parser import FrequencyDomainDataParser
@@ -13,6 +15,8 @@ class SyntheticFrequencyDomainRadarDataset(Dataset):
 		raw = loader.load_all_data()
 		self.metadata = raw[0]
 		self._data = raw[1:]
+
+		self._normalize_data()
 
 		self.dataset_name = self.metadata['dataset_name']
 		self._length = self.metadata['len']
@@ -29,3 +33,14 @@ class SyntheticFrequencyDomainRadarDataset(Dataset):
 		obj = self._data[idx]
 		parsed_signal, label, misc_data = self.td_data_parser.parse_data_object(obj)
 		return parsed_signal, label
+
+	def _normalize_data(self):
+		temp_tensor_list = []
+		for i in range(len(self._data)):
+			temp_tensor_list.append(tensor(self._data[i]['signal']))
+
+		temp_tensor = stack(temp_tensor_list, dim=0)
+		temp_tensor = normalize(temp_tensor, dim=(2,3))
+
+		for i in range(len(self._data)):
+			self._data[i]['signal'] = temp_tensor[i]

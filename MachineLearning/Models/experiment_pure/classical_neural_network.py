@@ -1,17 +1,18 @@
 from torch import nn
 
 class ClassicalNeuralNetwork(nn.Module):
-	def __init__(self):
+	def __init__(self, l1=500, l2=250):
 		super().__init__()
+		self.init_kwargs = {"l1": l1, "l2": l2}
 		self.flatten = nn.Flatten()
 		self.linear_relu_stack = nn.Sequential(
-			nn.Linear(2*16*64, 500),
+			nn.Linear(10, l1),
 			nn.ReLU(),
-			nn.Linear(500, 250),
+			nn.Linear(l1, l2),
 			nn.ReLU(),
-			nn.Linear(250, 100),
+			nn.Linear(l2, 100),
 			nn.ReLU(),
-			nn.Linear(100, 6),
+			nn.Linear(100, 3),
 		)
 
 	def forward(self, x):
