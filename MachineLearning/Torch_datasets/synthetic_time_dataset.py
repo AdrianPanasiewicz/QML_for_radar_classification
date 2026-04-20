@@ -1,7 +1,7 @@
 from torch.utils.data import Dataset
 from torch import stack
-from MachineLearning.Preprocessing.time_domain_parser import TimeDomainDataParser
-from MachineLearning.Preprocessing.file_loader import SyntheticDataFileLoader
+from MachineLearning.Processing.time_domain_parser import TimeDomainDataParser
+from MachineLearning.Processing.file_loader import SyntheticDataFileLoader
 from Data.Generators.synthetic_dataset_generator import DatasetMetadata
 
 class SyntheticTimeDomainRadarDataset(Dataset):

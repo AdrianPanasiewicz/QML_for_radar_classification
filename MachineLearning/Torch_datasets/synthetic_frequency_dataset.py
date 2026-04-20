@@ -2,8 +2,8 @@ from torch.utils.data import Dataset
 from torch import tensor, stack
 from torch.nn.functional import normalize
 from Data.Generators.synthetic_dataset_generator import DatasetMetadata
-from MachineLearning.Preprocessing.file_loader import SyntheticDataFileLoader
-from MachineLearning.Preprocessing.frequency_domain_parser import FrequencyDomainDataParser
+from MachineLearning.Processing.file_loader import SyntheticDataFileLoader
+from MachineLearning.Processing.frequency_domain_parser import FrequencyDomainDataParser
 
 class SyntheticFrequencyDomainRadarDataset(Dataset):
 	def __init__(self, dataset_file_path, transform=None, target_transform=None):

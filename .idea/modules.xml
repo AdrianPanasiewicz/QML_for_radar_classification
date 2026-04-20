@@ -4,6 +4,7 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/QML_for_radar_classification.iml" filepath="$PROJECT_DIR$/.idea/QML_for_radar_classification.iml" />
       <module fileurl="file://$PROJECT_DIR$/../forked_repos/.idea/forked_repos.iml" filepath="$PROJECT_DIR$/../forked_repos/.idea/forked_repos.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../forked_repos/quantum-oracle-sketching/.idea/quantum-oracle-sketching.iml" filepath="$PROJECT_DIR$/../forked_repos/quantum-oracle-sketching/.idea/quantum-oracle-sketching.iml" />
     </modules>
   </component>
 </project>

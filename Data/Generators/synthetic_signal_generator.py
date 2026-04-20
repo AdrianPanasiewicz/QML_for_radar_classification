@@ -65,7 +65,7 @@ class SyntheticSignalGenerator:
         if self.noise_model is not None:
             self.noise_model.set_parameters(params)
         else:
-            raise AttributeError("Error model was not set")
+            raise AttributeError("Error model_class was not set")
 
     def generate_signal(self, context, stft_form=True):
         if not isinstance(context, Context):
