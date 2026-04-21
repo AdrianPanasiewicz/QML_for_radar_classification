@@ -3,7 +3,7 @@ from pathlib import Path
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from torch.optim import SGD
+from torch.optim import SGD, Adam
 from ray import tune
 from ray.tune import Checkpoint
 from MachineLearning.Trainers.abstract_trainer import AbstractTrainer
@@ -22,7 +22,8 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
         if torch.cuda.device_count() > 1:
             net = nn.DataParallel(net)
 
-        optimizer = SGD(net.parameters(), lr=config["lr"], momentum=0.9)
+        optimizer = Adam(net.parameters(), lr=config["lr"])
+        # optimizer = SGD(net.parameters(), lr=config["lr"], momentum=0.9)
 
         checkpoint = tune.get_checkpoint()
         if checkpoint:
