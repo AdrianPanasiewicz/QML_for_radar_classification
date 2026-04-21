@@ -128,7 +128,7 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
 
     def calculate_metrics(self, labels, predictions):
 
-        tn, fp, fn, tp = confusion_matrix(labels, predictions)
+        tn, fp, fn, tp = confusion_matrix(labels, predictions).ravel()
         accuracy = accuracy_score(labels, predictions)
         balanced_acc = balanced_accuracy_score(labels, predictions)
         precision = precision_score(labels, predictions, zero_division=0)

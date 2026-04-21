@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import torch
-from torch.optim import SGD
+from torch.optim import SGD, Adam
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -46,7 +46,8 @@ class TrainerForModelStatistics(AbstractTrainer):
                 neurons_per_layer=config["neurons_per_layer"]
             ).to(device)
 
-            optimizer = SGD(net.parameters(), lr=config["lr"], momentum=0.9) # Do poprawienia
+            optimizer = Adam(net.parameters(), lr=config["lr"])
+            # optimizer = SGD(net.parameters(), lr=config["lr"], momentum=0.9) # Do poprawienia
             trainloader = DataLoader(self.trainset, batch_size=int(config["batch_size"]), shuffle=True, num_workers=2) # Do poprawienia
             valloader = DataLoader(self.valset, batch_size=int(config["batch_size"]), shuffle=False, num_workers=2)
 
@@ -55,7 +56,7 @@ class TrainerForModelStatistics(AbstractTrainer):
                 "validation_loss": []
             }
 
-            for epoch in range(number_of_epochs):
+            for epoch in tqdm(range(number_of_epochs), desc='Epochs'):
                 net.train()
 
                 for inputs, labels in trainloader:
@@ -82,6 +83,7 @@ class TrainerForModelStatistics(AbstractTrainer):
                         predicted = outputs.argmax(dim=1)
                         total += labels.size(0)
                         correct += (predicted == labels).sum().item()
+
 
                 data_dict_per_epoch["validation_loss"].append(val_loss / val_steps)
                 data_dict_per_epoch["accuracy"].append(100 * correct / total)
