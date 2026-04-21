@@ -47,8 +47,8 @@ class TrainerForModelStatistics(AbstractTrainer):
             ).to(device)
 
             optimizer = SGD(net.parameters(), lr=config["lr"], momentum=0.9) # Do poprawienia
-            trainloader = DataLoader(self.trainset, batch_size=int(config["batch_size"]), shuffle=True) # Do poprawienia
-            valloader = DataLoader(self.valset, batch_size=int(config["batch_size"]), shuffle=False)
+            trainloader = DataLoader(self.trainset, batch_size=int(config["batch_size"]), shuffle=True, num_workers=2) # Do poprawienia
+            valloader = DataLoader(self.valset, batch_size=int(config["batch_size"]), shuffle=False, num_workers=2)
 
             data_dict_per_epoch = {
                 "accuracy": [],

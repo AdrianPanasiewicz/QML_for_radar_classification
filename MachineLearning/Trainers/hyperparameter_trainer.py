@@ -97,7 +97,6 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
                     checkpoint=checkpoint,
                 )
 
-        return net
 
     def test_model(self, model, device="cpu"):
         testloader = DataLoader(self.testset, batch_size=32, shuffle=True)
