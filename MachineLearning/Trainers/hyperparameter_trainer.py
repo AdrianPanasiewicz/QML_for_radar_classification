@@ -39,6 +39,7 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
         valloader = DataLoader(self.valset, batch_size=int(config["batch_size"]))
 
         for epoch in range(start_epoch, config['epochs']):
+            net.train()
             running_loss = 0.0
             epoch_steps = 0
             for i, data in enumerate(trainloader, 0):
@@ -62,6 +63,7 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
                 #     )
                 #     running_loss = 0.0
 
+            net.eval()
             val_loss = 0.0
             val_steps = 0
             total = 0
