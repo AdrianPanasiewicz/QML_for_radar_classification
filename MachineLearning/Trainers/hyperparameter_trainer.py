@@ -23,9 +23,6 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
         device = training_config["device"]
         net = net.to(device)
 
-        if torch.cuda.device_count() > 1:
-            net = nn.DataParallel(net)
-
         if training_config["optimizer"]["name"] == "SGD":
             optimizer = SGD(
                 net.parameters(),

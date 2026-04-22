@@ -9,7 +9,7 @@ class QuantumNeuralNetwork(nn.Module):
             "amplitude": self.amplitude_embedding
         }
         self.ansatzes = {
-            "basic" : self.basic_ansatz,
+            "basic" : self.basic_layers,
             "entangling": self.entangling_layers,
             "random": self.random_layers
         }
@@ -31,9 +31,24 @@ class QuantumNeuralNetwork(nn.Module):
             self.ansatzes[self.init_kwargs['ansatz']](weights)
             return qml.expval(qml.PauliZ(0))
 
-        weight_shapes = {
-            "weights": (self.init_kwargs["layers"], self.init_kwargs["n_qubits"])
-        }
+        ansatz = self.init_kwargs["ansatz"]
+        n_layers = self.init_kwargs["layers"]
+        n_qubits = self.init_kwargs["n_qubits"]
+
+        if ansatz == "basic":
+            weight_shapes = {
+                "weights": qml.BasicEntanglerLayers.shape(n_layers=n_layers, n_wires=n_qubits)
+            }
+        elif ansatz == "entangling":
+            weight_shapes = {
+                "weights": qml.StronglyEntanglingLayers.shape(n_layers=n_layers, n_wires=n_qubits)
+            }
+        elif ansatz == "random":
+            weight_shapes = {
+                "weights": qml.RandomLayers.shape(n_layers=n_layers, n_rotations=n_qubits)
+            }
+        else:
+            raise ValueError(f"Unknown ansatz: {ansatz}")
 
         self.qnode = qml.qnn.TorchLayer(classifier, weight_shapes)
 
