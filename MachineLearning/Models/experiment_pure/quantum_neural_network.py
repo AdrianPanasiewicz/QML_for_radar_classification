@@ -1,32 +1,30 @@
 import pennylane as qml
+from cv2 import QRCodeDetectorAruco
 from torch import nn
 import torch
 
 class QuantumNeuralNetwork(nn.Module):
     def __init__(self, n_qubits, device='default.qubit'):
         super(QuantumNeuralNetwork, self).__init__()
-        self.init_kwargs = {"n_qubits": n_qubits, "device": 'default.qubit'}
+        self.init_kwargs = {
+            "n_qubits": n_qubits,
+            "layers": 1,
+            "encoding": None,
+            "Ansatz": None,
+            "simulator": 'lightning.qubit', # Try "default.mixed"
+            "gpu": False
+            }
         self.model_name = self.__class__.__name__
         self.n_qubits = n_qubits
-        self.dev = qml.device(device, wires=n_qubits)
+        self.dev = qml.device(self.init_kwargs["simulator"], wires=n_qubits)
 
         def quantum_circuit(inputs, weights):
-            qml.AngleEmbedding(inputs, wires=range(n_qubits))
-            qml.BasicEntanglerLayers(weights, wires=range(n_qubits))
-            return [qml.expval(qml.PauliZ(i)) for i in range(n_qubits)]
+            pass
 
         self.qnode = qml.QNode(quantum_circuit, self.dev, interface='torch')
 
-        self.quantum_weights = nn.Parameter(torch.rand((3, self.n_qubits), requires_grad=True))
-        self.classical_layer = nn.Sequential(
-            nn.Linear(n_qubits, 64),
-            nn.ReLU(),
-            nn.Linear(64, 6)
-        )
 
     def forward(self, x):
-        x_quantum = torch.tensor(x, dtype=torch.float32)
-        quantum_out = self.qnode(x_quantum, self.quantum_weights)
-        quantum_out = torch.stack(quantum_out, dim=1).to(torch.float32)
-        out = self.classical_layer(quantum_out)
-        return out
+        pass
+
+qnn = QuantumNeuralNetwork(n_qubits=2)
