@@ -7,6 +7,7 @@ from tqdm import tqdm
 
 from MachineLearning.Trainers.abstract_trainer import AbstractTrainer
 from MachineLearning.Models.experiment_pure.classical_neural_network import ClassicalNeuralNetwork
+from MachineLearning.Models.experiment_pure.quantum_neural_network import QuantumNeuralNetwork
 
 MODEL_REGISTRY = {
     "ClassicalNeuralNetwork": ClassicalNeuralNetwork,
@@ -34,36 +35,42 @@ class TrainerForModelStatistics(AbstractTrainer):
         return model_class_name, model_init_kwargs, net_state_dict
 
 
-    def train_model(self, model_class, config, number_of_trials=10, number_of_epochs=50):
+    def train_model(self, model_class, config):
 
-        device = config["device"]
+        training_config = config["training_config"]
+        model_config = config["model_config"]
+
+        device = training_config["device"]
         data_array_all_runs = []
 
-        for model_run in tqdm(range(number_of_trials), desc="Model runs"):
+        for model_run in tqdm(range(training_config['number_of_trials']), desc="Model runs"):
 
-            net = model_class(
-                layers=config["layers"],
-                neurons_per_layer=config["neurons_per_layer"]
-            ).to(device)
+            net = model_class(model_config).to(device)
 
-            optimizer = Adam(net.parameters(), lr=config["lr"])
+            optimizer = Adam(net.parameters(), lr=training_config["lr"])
             # optimizer = SGD(net.parameters(), lr=config["lr"], momentum=0.9) # Do poprawienia
-            trainloader = DataLoader(self.trainset, batch_size=int(config["batch_size"]), shuffle=True, num_workers=2) # Do poprawienia
-            valloader = DataLoader(self.valset, batch_size=int(config["batch_size"]), shuffle=False, num_workers=2)
+            trainloader = DataLoader(self.trainset, batch_size=int(training_config["batch_size"]), shuffle=True, num_workers=2) # Do poprawienia
+            valloader = DataLoader(self.valset, batch_size=int(training_config["batch_size"]), shuffle=False, num_workers=2)
 
             data_dict_per_epoch = {
                 "accuracy": [],
                 "validation_loss": []
             }
 
-            for epoch in tqdm(range(number_of_epochs), desc='Epochs'):
+            for epoch in tqdm(range(training_config['epochs']), desc='Epochs'):
                 net.train()
 
                 for inputs, labels in trainloader:
                     inputs, labels = inputs.to(device), labels.to(device)
                     optimizer.zero_grad()
-                    outputs = net(inputs)
-                    loss = self.criterion(outputs, labels)
+                    if isinstance(net, QuantumNeuralNetwork):
+                        outputs = net(inputs).squeeze()
+                        probs = (outputs + 1.0) / 2.0
+                        loss = self.criterion(probs, labels.float())
+                    else:
+                        outputs = net(inputs)
+                        loss = self.criterion(outputs, labels)
+
                     loss.backward()
                     optimizer.step()
 
@@ -76,11 +83,20 @@ class TrainerForModelStatistics(AbstractTrainer):
                 with torch.no_grad():
                     for inputs, labels in valloader:
                         inputs, labels = inputs.to(device), labels.to(device)
-                        outputs = net(inputs)
-                        loss = self.criterion(outputs, labels)
+                        if isinstance(net, QuantumNeuralNetwork):
+                            outputs = net(inputs).squeeze()
+                            probs = (outputs + 1.0) / 2.0
+                            loss = self.criterion(probs, labels.float())
+                            predicted = (outputs >= 0).long()
+
+                        else:
+                            outputs = net(inputs)
+                            loss = self.criterion(outputs, labels)
+                            predicted = outputs.argmax(dim=1)
+
                         val_loss += loss.item()
                         val_steps += 1
-                        predicted = outputs.argmax(dim=1)
+
                         total += labels.size(0)
                         correct += (predicted == labels).sum().item()
 

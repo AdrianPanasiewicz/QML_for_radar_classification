@@ -3,27 +3,42 @@ from pathlib import Path
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from torch.optim import SGD, Adam
+from torch.optim import SGD, Adam, LBFGS
 from ray import tune
 from ray.tune import Checkpoint
 from MachineLearning.Trainers.abstract_trainer import AbstractTrainer
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from MachineLearning.Models.experiment_pure.quantum_neural_network import QuantumNeuralNetwork
 
 
 class TrainerForHyperparameterSearch(AbstractTrainer):
     def __init__(self, training_path, validating_path, testing_path , criterion):
         super().__init__(training_path, validating_path, testing_path, criterion)
 
-    def train_model(self, config, model_class: nn.Module):
-        net = model_class(config["layers"], config["neurons_per_layer"])
-        device = config["device"]
+    def train_model(self, config, model_class):
+        training_config = config["training_config"]
+        model_config = config["model_config"]
 
+        net = model_class(model_config)
+        device = training_config["device"]
         net = net.to(device)
+
         if torch.cuda.device_count() > 1:
             net = nn.DataParallel(net)
 
-        optimizer = Adam(net.parameters(), lr=config["lr"])
-        # optimizer = SGD(net.parameters(), lr=config["lr"], momentum=0.9)
+        if training_config["optimizer"]["name"] == "SGD":
+            optimizer = SGD(
+                net.parameters(),
+                lr=training_config["optimizer"]["lr"],
+                momentum=training_config["optimizer"]["momentum"],
+                weight_decay=training_config["optimizer"]["weight_decay"],
+            )
+        elif training_config["optimizer"]["name"] == "Adam":
+            optimizer = Adam(
+                net.parameters(),
+                lr=training_config["optimizer"]["lr"],
+                weight_decay=training_config["optimizer"]["weight_decay"],
+            )
 
         checkpoint = tune.get_checkpoint()
         if checkpoint:
@@ -36,33 +51,30 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
         else:
             start_epoch = 0
 
-        trainloader = DataLoader(self.trainset, batch_size=int(config["batch_size"]), shuffle=True)
-        valloader = DataLoader(self.valset, batch_size=int(config["batch_size"]))
+        trainloader = DataLoader(self.trainset, batch_size=int(training_config["batch_size"]), shuffle=True)
+        valloader = DataLoader(self.valset, batch_size=int(training_config["batch_size"]))
 
-        for epoch in range(start_epoch, config['epochs']):
+        for epoch in range(start_epoch, training_config['epochs']):
             net.train()
-            running_loss = 0.0
             epoch_steps = 0
             for i, data in enumerate(trainloader, 0):
                 inputs, labels = data
                 inputs, labels = inputs.to(device), labels.to(device)
 
                 optimizer.zero_grad()
+                if isinstance(net, QuantumNeuralNetwork):
+                    outputs = net(inputs).squeeze()
+                    probs = (outputs + 1.0) / 2.0
+                    loss = self.criterion(probs, labels.float())
+                else:
+                    outputs = net(inputs)
+                    loss = self.criterion(outputs, labels)
 
-                outputs = net(inputs)
-                loss = self.criterion(outputs, labels)
                 loss.backward()
                 optimizer.step()
 
-
                 epoch_steps += 1
-                # running_loss += loss.item()
-                # if i % 2000 == 1999:
-                #     print(
-                #         "[%d, %5d] loss: %.3f"
-                #         % (epoch + 1, i + 1, running_loss / epoch_steps)
-                #     )
-                #     running_loss = 0.0
+
 
             net.eval()
             val_loss = 0.0
@@ -74,31 +86,40 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
                     inputs, labels = data
                     inputs, labels = inputs.to(device), labels.to(device)
 
-                    outputs = net(inputs)
-                    _, predicted = torch.max(outputs.data, 1)
+                    if isinstance(net, QuantumNeuralNetwork):
+                        outputs = net(inputs).squeeze()
+                        probs = (outputs + 1.0) / 2.0
+                        loss = self.criterion(probs, labels.float())
+                        predicted = (outputs >= 0).long()
+
+                    else:
+                        outputs = net(inputs)
+                        loss = self.criterion(outputs, labels)
+                        predicted = outputs.argmax(dim=1)
+
+                    val_loss += loss.item()
+                    val_steps += 1
+
                     total += labels.size(0)
                     correct += (predicted == labels).sum().item()
 
-                    loss = self.criterion(outputs, labels)
-                    val_loss += loss.cpu().numpy()
-                    val_steps += 1
+            if epoch % 20 == 0:
+                checkpoint_data = {
+                    "epoch": epoch,
+                    "model_class_name": net.module.model_name if isinstance(net, nn.DataParallel) else net.model_name,
+                    "model_init_kwargs": net.module.init_kwargs if isinstance(net, nn.DataParallel) else net.init_kwargs,
+                    "net_state_dict": net.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                }
+                with tempfile.TemporaryDirectory() as checkpoint_dir:
+                    checkpoint_path = Path(checkpoint_dir) / "checkpoint.pt"
+                    torch.save(checkpoint_data, checkpoint_path)
 
-            checkpoint_data = {
-                "epoch": epoch,
-                "model_class_name": net.module.model_name if isinstance(net, nn.DataParallel) else net.model_name,
-                "model_init_kwargs": net.module.init_kwargs if isinstance(net, nn.DataParallel) else net.init_kwargs,
-                "net_state_dict": net.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-            }
-            with tempfile.TemporaryDirectory() as checkpoint_dir:
-                checkpoint_path = Path(checkpoint_dir) / "checkpoint.pt"
-                torch.save(checkpoint_data, checkpoint_path)
-
-                checkpoint = Checkpoint.from_directory(checkpoint_dir)
-                tune.report(
-                    {"loss": val_loss / val_steps, "accuracy": correct / total},
-                    checkpoint=checkpoint,
-                )
+                    checkpoint = Checkpoint.from_directory(checkpoint_dir)
+                    tune.report(
+                        {"loss": val_loss / val_steps, "accuracy": correct / total},
+                        checkpoint=checkpoint,
+                    )
 
 
     def test_model(self, model, device="cpu"):
