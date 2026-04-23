@@ -1,6 +1,8 @@
 import tempfile
 from pathlib import Path
 import torch
+import os
+import gc
 from torch import nn
 from torch.utils.data import DataLoader
 from torch.optim import SGD, Adam, LBFGS
@@ -36,6 +38,8 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
                 lr=training_config["optimizer"]["lr"],
                 weight_decay=training_config["optimizer"]["weight_decay"],
             )
+        else:
+            raise TypeError(f"Assigned {training_config["optimizer"]["name"]} is not implemented in hyperparameter search")
 
         checkpoint = tune.get_checkpoint()
         if checkpoint:
@@ -48,8 +52,27 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
         else:
             start_epoch = 0
 
-        trainloader = DataLoader(self.trainset, batch_size=int(training_config["batch_size"]), shuffle=True)
-        valloader = DataLoader(self.valset, batch_size=int(training_config["batch_size"]))
+        trainloader = DataLoader(
+            self.trainset,
+            batch_size=int(training_config["batch_size"]),
+            shuffle=True,
+            num_workers=4,
+            pin_memory=False if training_config["device"]=="cpu" else True,
+            persistent_workers=True
+        )
+        valloader = DataLoader(
+            self.valset,
+            batch_size=int(training_config["batch_size"]),
+            shuffle = False,
+            num_workers = 2,
+            pin_memory = False if training_config["device"]=="cpu" else True,
+            persistent_workers = True
+        )
+
+        threads = 8
+        torch.set_num_threads(threads)
+        os.environ["OMP_NUM_THREADS"] = str(threads)
+        os.environ["MKL_NUM_THREADS"] = str(threads)
 
         for epoch in range(start_epoch, training_config['epochs']):
             net.train()
@@ -94,11 +117,11 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
                         loss = self.criterion(outputs, labels)
                         predicted = outputs.argmax(dim=1)
 
-                    val_loss += loss.item()
+                    val_loss += loss.detach()
                     val_steps += 1
 
                     total += labels.size(0)
-                    correct += (predicted == labels).sum().item()
+                    correct += (predicted == labels).sum().detach()
 
             if epoch % 20 == 0:
                 checkpoint_data = {
@@ -113,10 +136,20 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
                     torch.save(checkpoint_data, checkpoint_path)
 
                     checkpoint = Checkpoint.from_directory(checkpoint_dir)
+
+                    final_loss = float(val_loss.cpu().numpy()) / val_steps
+                    final_accuracy = float(correct.cpu().numpy()) / total
+
                     tune.report(
-                        {"loss": val_loss / val_steps, "accuracy": correct / total},
+                        {"loss": final_loss, "accuracy": final_accuracy},
                         checkpoint=checkpoint,
                     )
+
+            try:
+                del inputs, labels, outputs, loss, probs
+            except NameError:
+                pass
+            gc.collect()
 
 
     def test_model(self, model, device="cpu"):
@@ -132,7 +165,7 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
                 _, preds = torch.max(outputs.data, 1)
 
                 loss = self.criterion(outputs, labels)
-                val_loss += loss.item() * inputs.size(0)
+                val_loss += loss.detach() * inputs.size(0)
 
                 all_preds.append(preds)
                 all_labels.append(labels)

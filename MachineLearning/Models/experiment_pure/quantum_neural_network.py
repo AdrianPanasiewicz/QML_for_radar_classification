@@ -25,7 +25,7 @@ class QuantumNeuralNetwork(nn.Module):
 
         self.dev = qml.device(self.init_kwargs["simulator"], wires=config["n_qubits"])
 
-        @qml.qnode(self.dev, interface="torch", diff_method="adjoint") # Try diff_method="backprop"
+        @qml.qnode(self.dev, interface="torch", diff_method="backprop")
         def classifier(inputs, weights):
             self.encodings[self.init_kwargs['encoding']](inputs)
             self.ansatzes[self.init_kwargs['ansatz']](weights)

@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import os
+import gc
 import torch
 from torch.optim import SGD, Adam
 from torch.utils.data import DataLoader
@@ -43,14 +45,46 @@ class TrainerForModelStatistics(AbstractTrainer):
         device = training_config["device"]
         data_array_all_runs = []
 
+        trainloader = DataLoader(self.trainset,
+                                 batch_size=int(training_config["batch_size"]),
+                                 shuffle=True,
+                                 num_workers=4,
+                                 pin_memory=False if training_config["device"]=="cpu" else True,
+                                 persistent_workers=True
+                                 )
+        valloader = DataLoader(self.valset,
+                               batch_size=int(training_config["batch_size"]),
+                               shuffle=False,
+                               num_workers=2,
+                               pin_memory=False if training_config["device"]=="cpu" else True,
+                               persistent_workers=True
+                               )
+
+        threads = 8
+        torch.set_num_threads(threads)
+        os.environ["OMP_NUM_THREADS"] = str(threads)
+        os.environ["MKL_NUM_THREADS"] = str(threads)
+
         for model_run in tqdm(range(training_config['number_of_trials']), desc="Model runs"):
 
             net = model_class(model_config).to(device)
 
-            optimizer = Adam(net.parameters(), lr=training_config["lr"])
-            # optimizer = SGD(net.parameters(), lr=config["lr"], momentum=0.9) # Do poprawienia
-            trainloader = DataLoader(self.trainset, batch_size=int(training_config["batch_size"]), shuffle=True, num_workers=2) # Do poprawienia
-            valloader = DataLoader(self.valset, batch_size=int(training_config["batch_size"]), shuffle=False, num_workers=2)
+            if training_config["optimizer"]["name"] == "SGD":
+                optimizer = SGD(
+                    net.parameters(),
+                    lr=training_config["optimizer"]["lr"],
+                    momentum=training_config["optimizer"]["momentum"],
+                    weight_decay=training_config["optimizer"]["weight_decay"],
+                )
+            elif training_config["optimizer"]["name"] == "Adam":
+                optimizer = Adam(
+                    net.parameters(),
+                    lr=training_config["optimizer"]["lr"],
+                    weight_decay=training_config["optimizer"]["weight_decay"],
+                )
+            else:
+                raise TypeError(
+                    f"Assigned {training_config["optimizer"]["name"]} is not implemented in hyperparameter search")
 
             data_dict_per_epoch = {
                 "accuracy": [],
@@ -94,17 +128,18 @@ class TrainerForModelStatistics(AbstractTrainer):
                             loss = self.criterion(outputs, labels)
                             predicted = outputs.argmax(dim=1)
 
-                        val_loss += loss.item()
+                        val_loss += loss.detach()
                         val_steps += 1
 
                         total += labels.size(0)
-                        correct += (predicted == labels).sum().item()
+                        correct += (predicted == labels).sum().detach()
 
 
                 data_dict_per_epoch["validation_loss"].append(val_loss / val_steps)
                 data_dict_per_epoch["accuracy"].append(100 * correct / total)
 
             data_array_all_runs.append(data_dict_per_epoch)
+            gc.collect()
 
         return data_array_all_runs
 
