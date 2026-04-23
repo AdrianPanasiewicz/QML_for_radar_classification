@@ -1,5 +1,6 @@
 import tempfile
 from pathlib import Path
+from tqdm import tqdm
 import torch
 import os
 import gc
@@ -17,7 +18,7 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
     def __init__(self, training_path, validating_path, testing_path , criterion):
         super().__init__(training_path, validating_path, testing_path, criterion)
 
-    def train_model(self, config, model_class):
+    def train_model(self, trial, config, model_class):
         training_config = config["training_config"]
         model_config = config["model_config"]
 
@@ -41,16 +42,16 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
         else:
             raise TypeError(f"Assigned {training_config["optimizer"]["name"]} is not implemented in hyperparameter search")
 
-        checkpoint = tune.get_checkpoint()
-        if checkpoint:
-            with checkpoint.as_directory() as checkpoint_dir:
-                checkpoint_path = Path(checkpoint_dir) / "checkpoint.pt"
-                checkpoint_state = torch.load(checkpoint_path)
-                start_epoch = checkpoint_state["epoch"]
-                net.load_state_dict(checkpoint_state["net_state_dict"])
-                optimizer.load_state_dict(checkpoint_state["optimizer_state_dict"])
-        else:
-            start_epoch = 0
+        # checkpoint = tune.get_checkpoint()
+        # if checkpoint:
+        #     with checkpoint.as_directory() as checkpoint_dir:
+        #         checkpoint_path = Path(checkpoint_dir) / "checkpoint.pt"
+        #         checkpoint_state = torch.load(checkpoint_path)
+        #         start_epoch = checkpoint_state["epoch"]
+        #         net.load_state_dict(checkpoint_state["net_state_dict"])
+        #         optimizer.load_state_dict(checkpoint_state["optimizer_state_dict"])
+        # else:
+        #     start_epoch = 0
 
         trainloader = DataLoader(
             self.trainset,
@@ -58,7 +59,6 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
             shuffle=True,
             num_workers=4,
             pin_memory=False if training_config["device"]=="cpu" else True,
-            persistent_workers=True
         )
         valloader = DataLoader(
             self.valset,
@@ -66,7 +66,6 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
             shuffle = False,
             num_workers = 2,
             pin_memory = False if training_config["device"]=="cpu" else True,
-            persistent_workers = True
         )
 
         threads = 8
@@ -74,7 +73,7 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
         os.environ["OMP_NUM_THREADS"] = str(threads)
         os.environ["MKL_NUM_THREADS"] = str(threads)
 
-        for epoch in range(start_epoch, training_config['epochs']):
+        for epoch in tqdm(range(training_config['epochs']), desc="Epochs"):
             net.train()
             epoch_steps = 0
             for i, data in enumerate(trainloader, 0):
@@ -123,33 +122,41 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
                     total += labels.size(0)
                     correct += (predicted == labels).sum().detach()
 
-            if epoch % 20 == 0:
-                checkpoint_data = {
-                    "epoch": epoch,
-                    "model_class_name": net.module.model_name if isinstance(net, nn.DataParallel) else net.model_name,
-                    "model_init_kwargs": net.module.init_kwargs if isinstance(net, nn.DataParallel) else net.init_kwargs,
-                    "net_state_dict": net.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                }
-                with tempfile.TemporaryDirectory() as checkpoint_dir:
-                    checkpoint_path = Path(checkpoint_dir) / "checkpoint.pt"
-                    torch.save(checkpoint_data, checkpoint_path)
+            # if epoch % 20 == 0:
+            #     checkpoint_data = {
+            #         "epoch": epoch,
+            #         "model_class_name": net.module.model_name if isinstance(net, nn.DataParallel) else net.model_name,
+            #         "model_init_kwargs": net.module.init_kwargs if isinstance(net, nn.DataParallel) else net.init_kwargs,
+            #         "net_state_dict": net.state_dict(),
+            #         "optimizer_state_dict": optimizer.state_dict(),
+            #     }
+            #     with tempfile.TemporaryDirectory() as checkpoint_dir:
+            #         checkpoint_path = Path(checkpoint_dir) / "checkpoint.pt"
+            #         torch.save(checkpoint_data, checkpoint_path)
+            #
+            #         checkpoint = Checkpoint.from_directory(checkpoint_dir)
+            #
+            #         final_loss = float(val_loss.cpu().numpy()) / val_steps
+            #         final_accuracy = float(correct.cpu().numpy()) / total
+            #
+            #         tune.report(
+            #             {"loss": final_loss, "accuracy": final_accuracy},
+            #             checkpoint=checkpoint,
+            #         )
 
-                    checkpoint = Checkpoint.from_directory(checkpoint_dir)
-
-                    final_loss = float(val_loss.cpu().numpy()) / val_steps
-                    final_accuracy = float(correct.cpu().numpy()) / total
-
-                    tune.report(
-                        {"loss": final_loss, "accuracy": final_accuracy},
-                        checkpoint=checkpoint,
-                    )
+            accuracy = float(correct.cpu().numpy()) / total
+            trial.report(accuracy, epoch)
+            if trial.should_prune():
+                raise optuna.TrialPruned()
 
             try:
                 del inputs, labels, outputs, loss, probs
             except NameError:
                 pass
+
             gc.collect()
+
+        return accuracy
 
 
     def test_model(self, model, device="cpu"):

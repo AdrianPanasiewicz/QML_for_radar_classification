@@ -50,14 +50,12 @@ class TrainerForModelStatistics(AbstractTrainer):
                                  shuffle=True,
                                  num_workers=4,
                                  pin_memory=False if training_config["device"]=="cpu" else True,
-                                 persistent_workers=True
                                  )
         valloader = DataLoader(self.valset,
                                batch_size=int(training_config["batch_size"]),
                                shuffle=False,
                                num_workers=2,
                                pin_memory=False if training_config["device"]=="cpu" else True,
-                               persistent_workers=True
                                )
 
         threads = 8
