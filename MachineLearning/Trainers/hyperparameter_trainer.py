@@ -58,21 +58,18 @@ class HyperparameterTrainer(AbstractTrainer):
             self.trainset,
             batch_size=int(training_config["batch_size"]),
             shuffle=True,
-            num_workers=4,
+            num_workers=training_config['number_of_training_workers'],
             pin_memory=False if training_config["device"]=="cpu" else True,
+            persistent_workers=True
         )
         valloader = DataLoader(
             self.valset,
             batch_size=int(training_config["batch_size"]),
             shuffle = False,
-            num_workers = 2,
+            num_workers = training_config['number_of_validating_workers'],
             pin_memory = False if training_config["device"]=="cpu" else True,
+            persistent_workers=True
         )
-
-        threads = 8
-        torch.set_num_threads(threads)
-        os.environ["OMP_NUM_THREADS"] = str(threads)
-        os.environ["MKL_NUM_THREADS"] = str(threads)
 
         for epoch in tqdm(range(training_config['epochs']), desc="Epochs"):
             net.train()
@@ -87,7 +84,16 @@ class HyperparameterTrainer(AbstractTrainer):
                     probs = torch.clamp((outputs + 1.0) / 2.0, 0.0, 1.0)
                     loss = self.criterion(probs, labels.float())
                 else:
-                    loss = self.criterion(outputs, labels.float())
+                    loss = self.criterion(outputs, labels.long())
+
+                if training_config["regularization"]["type"] is not None:
+                    if training_config["regularization"]['type']=='l1':
+                        penality = sum(p.abs().sum() for p in net.parameters())
+                        loss = loss + training_config["regularization"]["lambda"] * penality
+
+                    elif training_config['regularization']['type']=='l2':
+                        penality = sum((p**2).sum() for p in net.parameters())
+                        loss = loss + training_config["regularization"]["lambda"] * penality
 
                 loss.backward()
                 optimizer.step()
@@ -113,14 +119,23 @@ class HyperparameterTrainer(AbstractTrainer):
 
                     else:
                         outputs = net(inputs)
-                        loss = self.criterion(outputs, labels.float())
+                        loss = self.criterion(outputs, labels.long())
                         predicted = outputs.argmax(dim=1)
 
-                    val_loss += loss.detach()
+                    if training_config["regularization"]["type"] is not None:
+                        if training_config["regularization"]['type'] == 'l1':
+                            penality = sum(p.abs().sum() for p in net.parameters())
+                            loss = loss + training_config["regularization"]["lambda"] * penality
+
+                        elif training_config['regularization']['type'] == 'l2':
+                            penality = sum((p ** 2).sum() for p in net.parameters())
+                            loss = loss + training_config["regularization"]["lambda"] * penality
+
+                    val_loss += loss.item()
                     val_steps += 1
 
                     total += labels.size(0)
-                    correct += (predicted == labels).sum().detach()
+                    correct += (predicted == labels).sum().item()
 
             # if epoch % 20 == 0:
             #     checkpoint_data = {
@@ -144,7 +159,7 @@ class HyperparameterTrainer(AbstractTrainer):
             #             checkpoint=checkpoint,
             #         )
 
-            accuracy = float(correct.cpu().numpy()) / total
+            accuracy = correct / total
             trial.report(accuracy, epoch)
             if trial.should_prune():
                 raise optuna.TrialPruned()
@@ -174,7 +189,7 @@ class HyperparameterTrainer(AbstractTrainer):
                 _, preds = torch.max(outputs.data, 1)
 
                 loss = self.criterion(outputs, labels)
-                val_loss += loss.detach() * inputs.size(0)
+                val_loss += loss.item() * inputs.size(0)
 
                 all_preds.append(preds)
                 all_labels.append(labels)

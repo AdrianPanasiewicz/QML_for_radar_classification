@@ -60,10 +60,6 @@ class StatisticalTrainer(AbstractTrainer):
                                persistent_workers=True
                                )
 
-        threads = 8
-        torch.set_num_threads(threads)
-        os.environ["OMP_NUM_THREADS"] = str(threads)
-        os.environ["MKL_NUM_THREADS"] = str(threads)
 
         for model_run in tqdm(range(training_config['number_of_trials']), desc="Model runs"):
 
@@ -128,11 +124,11 @@ class StatisticalTrainer(AbstractTrainer):
                             loss = self.criterion(outputs, labels)
                             predicted = outputs.argmax(dim=1)
 
-                        val_loss += loss.detach()
+                        val_loss += loss.item()
                         val_steps += 1
 
                         total += labels.size(0)
-                        correct += (predicted == labels).sum().detach()
+                        correct += (predicted == labels).sum().item()
 
 
                 data_dict_per_epoch["validation_loss"].append(val_loss / val_steps)
