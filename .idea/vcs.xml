@@ -2,7 +2,6 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
-    <mapping directory="$PROJECT_DIR$/MachineLearning/Models/pennylane-lightning" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/../forked_repos/Comparative" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/../forked_repos/HQNN" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/../forked_repos/quantum-oracle-sketching" vcs="Git" />

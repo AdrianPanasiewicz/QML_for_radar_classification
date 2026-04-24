@@ -16,7 +16,7 @@ MODEL_REGISTRY = {
 }
 
 
-class TrainerForModelStatistics(AbstractTrainer):
+class StatisticalTrainer(AbstractTrainer):
     def __init__(self, training_path, validating_path, testing_path, criterion):
         super().__init__(training_path, validating_path, testing_path, criterion)
 
@@ -50,12 +50,14 @@ class TrainerForModelStatistics(AbstractTrainer):
                                  shuffle=True,
                                  num_workers=4,
                                  pin_memory=False if training_config["device"]=="cpu" else True,
+                                 persistent_workers=True
                                  )
         valloader = DataLoader(self.valset,
                                batch_size=int(training_config["batch_size"]),
                                shuffle=False,
                                num_workers=2,
                                pin_memory=False if training_config["device"]=="cpu" else True,
+                               persistent_workers=True
                                )
 
         threads = 8
@@ -139,6 +141,8 @@ class TrainerForModelStatistics(AbstractTrainer):
             data_array_all_runs.append(data_dict_per_epoch)
             gc.collect()
 
+        del trainloader
+        del valloader
         return data_array_all_runs
 
     def test_model(self, model):

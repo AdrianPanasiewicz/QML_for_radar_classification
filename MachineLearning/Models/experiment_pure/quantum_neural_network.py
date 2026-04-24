@@ -21,6 +21,7 @@ class QuantumNeuralNetwork(nn.Module):
             "ansatz": config["ansatz"],
             "simulator": config["simulator"],
         }
+        
         self.model_name = self.__class__.__name__
 
         self.dev = qml.device(self.init_kwargs["simulator"], wires=config["n_qubits"])

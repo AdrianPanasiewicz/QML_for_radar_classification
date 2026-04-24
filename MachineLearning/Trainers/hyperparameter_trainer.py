@@ -8,13 +8,14 @@ from torch import nn
 from torch.utils.data import DataLoader
 from torch.optim import SGD, Adam, LBFGS
 from ray import tune
+import optuna
 from ray.tune import Checkpoint
 from MachineLearning.Trainers.abstract_trainer import AbstractTrainer
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 from MachineLearning.Models.experiment_pure.quantum_neural_network import QuantumNeuralNetwork
 
 
-class TrainerForHyperparameterSearch(AbstractTrainer):
+class HyperparameterTrainer(AbstractTrainer):
     def __init__(self, training_path, validating_path, testing_path , criterion):
         super().__init__(training_path, validating_path, testing_path, criterion)
 
@@ -81,13 +82,12 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
                 inputs, labels = inputs.to(device), labels.to(device)
 
                 optimizer.zero_grad()
+                outputs = net(inputs).squeeze()
                 if isinstance(net, QuantumNeuralNetwork):
-                    outputs = net(inputs).squeeze()
-                    probs = (outputs + 1.0) / 2.0
+                    probs = torch.clamp((outputs + 1.0) / 2.0, 0.0, 1.0)
                     loss = self.criterion(probs, labels.float())
                 else:
-                    outputs = net(inputs)
-                    loss = self.criterion(outputs, labels)
+                    loss = self.criterion(outputs, labels.float())
 
                 loss.backward()
                 optimizer.step()
@@ -107,13 +107,13 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
 
                     if isinstance(net, QuantumNeuralNetwork):
                         outputs = net(inputs).squeeze()
-                        probs = (outputs + 1.0) / 2.0
+                        probs = torch.clamp((outputs + 1.0) / 2.0, 0.0, 1.0)
                         loss = self.criterion(probs, labels.float())
                         predicted = (outputs >= 0).long()
 
                     else:
                         outputs = net(inputs)
-                        loss = self.criterion(outputs, labels)
+                        loss = self.criterion(outputs, labels.float())
                         predicted = outputs.argmax(dim=1)
 
                     val_loss += loss.detach()
@@ -156,6 +156,8 @@ class TrainerForHyperparameterSearch(AbstractTrainer):
 
             gc.collect()
 
+        del trainloader
+        del valloader
         return accuracy
 
 
