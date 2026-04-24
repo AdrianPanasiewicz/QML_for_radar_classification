@@ -60,7 +60,6 @@ class HyperparameterTrainer(AbstractTrainer):
             shuffle=True,
             num_workers=training_config['number_of_training_workers'],
             pin_memory=False if training_config["device"]=="cpu" else True,
-            persistent_workers=True
         )
         valloader = DataLoader(
             self.valset,
@@ -68,7 +67,6 @@ class HyperparameterTrainer(AbstractTrainer):
             shuffle = False,
             num_workers = training_config['number_of_validating_workers'],
             pin_memory = False if training_config["device"]=="cpu" else True,
-            persistent_workers=True
         )
 
         for epoch in tqdm(range(training_config['epochs']), desc="Epochs"):
@@ -173,6 +171,8 @@ class HyperparameterTrainer(AbstractTrainer):
 
         del trainloader
         del valloader
+        gc.collect()
+        
         return accuracy
 
 
