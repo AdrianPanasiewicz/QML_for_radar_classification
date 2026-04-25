@@ -101,7 +101,7 @@ class SyntheticDatasetGenerator:
 
                 pickle.dump({"request": noise_metadata, "signal": noise_data}, file_handle)
 
-    def generate_signal_data(self, stft_form=False):         # Can be further optimized with multiprocessing and buffering saving
+    def generate_signal_data(self, stft_form=False):
         md = self.dataset_metadata
         full_path = md.save_path / f"{md.filename}.{md.file_format}"
 
