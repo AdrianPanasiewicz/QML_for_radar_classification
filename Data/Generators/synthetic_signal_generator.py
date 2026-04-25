@@ -28,7 +28,7 @@ class SyntheticSignalGenerator:
 
         element_second_part = (alpha + beta * sympy.cos(Omega_n)) * sympy.exp(-sympy.I*(L_1+L_2)/2) * sympy.sinc((L_2-L_1)/2*gamma_n)
 
-        Psi = first_part + sympy.Sum(element_second_part, (n,1,N))
+        Psi = first_part * sympy.Sum(element_second_part, (n,1,N))
 
         # display(Phi)
         return Psi
