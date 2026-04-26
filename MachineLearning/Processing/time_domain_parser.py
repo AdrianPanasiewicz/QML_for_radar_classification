@@ -72,7 +72,7 @@ class TimeDomainDataParser(DataParser):
 		delta_f = (1 / misc_data.context.dt) / nperseg
 
 		fig, axs = plt.subplots(2, 1, figsize=(12, 4), sharex=True, sharey=True)
-		fig.suptitle(f"Drone: {misc_data.drone.name}")
+		fig.suptitle(f"Drone: {misc_data.drone.name}, SNR={misc_data.context.snr}")
 
 		fig.supxlabel(f"Time t (dt={delta_t:g} s) [s]")
 		fig.supylabel(f"Freq. f ({f_pts} bins, df={delta_f:g} Hz) [Hz]")
@@ -87,3 +87,28 @@ class TimeDomainDataParser(DataParser):
 
 		fig.tight_layout()
 		plt.show()
+
+	# def plot_drone_spectrogram_pl(self, time_signal, misc_data, nperseg=32, noverlap=16):
+	#
+	# 	stft_signal = self.apply_stft(time_signal, misc_data, nperseg, noverlap)
+	#
+	# 	f_pts = stft_signal.shape[1]
+	# 	delta_t = noverlap * misc_data.context.dt
+	# 	delta_f = (1 / misc_data.context.dt) / nperseg
+	#
+	# 	fig, axs = plt.subplots(2, 1, figsize=(12, 4), sharex=True, sharey=True)
+	# 	fig.suptitle(f"Dron: {misc_data.drone.name}, SNR={misc_data.context.snr} dB")
+	#
+	# 	fig.supxlabel(f"Czas t (dt={delta_t:g} s) [s]")
+	# 	fig.supylabel(f"Częstotliwość f ({f_pts} prążków, df={delta_f:g} Hz) [Hz]")
+	#
+	# 	im1 = axs[0].imshow(stft_signal[0], origin='lower', aspect='auto', cmap='viridis')
+	# 	axs[0].set_title("Składowa rzeczywista")
+	# 	fig.colorbar(im1, ax=axs[0], label="Moduł |S(t,f)|")
+	#
+	# 	im2 = axs[1].imshow(stft_signal[1], origin='lower', aspect='auto', cmap='viridis')
+	# 	axs[1].set_title("Składowa urojona")
+	# 	fig.colorbar(im2, ax=axs[1], label="Moduł |S(t,f)|")
+	#
+	# 	fig.tight_layout()
+	# 	plt.show()
