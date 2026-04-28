@@ -193,6 +193,9 @@ class StatisticalTrainer(AbstractTrainer):
 
     def calculate_metrics(self, labels, predictions):
 
+        labels = labels.detach().cpu()
+        predictions = predictions.detach().cpu()
+
         tn, fp, fn, tp = confusion_matrix(labels, predictions).ravel()
         accuracy = accuracy_score(labels, predictions)
         balanced_acc = balanced_accuracy_score(labels, predictions)
