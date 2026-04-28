@@ -77,21 +77,23 @@ dataset_gen.generate_signal_data(stft_form=False) # Set to True for frequency do
 import optuna
 from torch import nn
 from MachineLearning.Trainers.hyperparameter_trainer import HyperparameterTrainer
-from MachineLearning.Models.experiment_pure.classical_neural_network import ClassicalNeuralNetwork
+from MachineLearning.Models.experiment_pure.quantum_neural_network import QuantumNeuralNetwork
 
 trainer = HyperparameterTrainer(
     training_path="Datasets/time_domain/training_dataset.pkl",
     validating_path="Datasets/time_domain/validating_dataset.pkl",
     testing_path="Datasets/time_domain/testing_dataset.pkl",
-    criterion=nn.CrossEntropyLoss()
+    criterion=nn.BCELoss()
 )
 
 def objective(trial):
     config = {
-        "model_config": {
-            "layers": trial.suggest_categorical("layers", ),[1][2][3][4]
-            "neurons_per_layer": 256,
-            "dropout_rate": trial.suggest_float("dropout_rate", 0.0, 0.5)
+        model_config = {
+            "n_qubits": 10,
+            "layers": trial.suggest_int("layers", 1, 5),
+            "encoding": trial.suggest_categorical("encoding", ["angle", "amplitude"]),
+            "ansatz": trial.suggest_categorical("ansatz", ["basic", "entangling", "random"]),
+            "simulator": "default.qubit",
         },
         "training_config": {
             "batch_size": trial.suggest_categorical("batch_size", ),[4][5][6]
@@ -103,7 +105,7 @@ def objective(trial):
             "regularization": {"type": "none", "lambda": None}
         }
     }
-    return trainer.train_model(trial, config, ClassicalNeuralNetwork)
+    return trainer.train_model(trial, config, QuantumNeuralNetwork)
 
 study = optuna.create_study(direction="maximize")
 study.optimize(objective, n_trials=50)
@@ -117,13 +119,15 @@ import torch
 from torch import nn
 from MachineLearning.Trainers.statistical_trainer import StatisticalTrainer
 from MachineLearning.Processing.data_visualizer import DataVisualizer
-from MachineLearning.Models.experiment_pure.classical_neural_network import ClassicalNeuralNetwork
+from MachineLearning.Models.experiment_pure.quantum_neural_network import QuantumNeuralNetwork
 
 config = {
-    "model_config": {
-        "layers": 4,
-        "neurons_per_layer": 128,
-        "dropout_rate": 0.2
+        model_config = {
+        "n_qubits"  : 10,
+        "layers"    : 2,
+        "encoding"  : "angle",
+        "ansatz"    : "basic",
+        "simulator" : 'default.qubit',
     },
     "training_config": {
         "number_of_training_workers": 4,
@@ -151,9 +155,9 @@ trainer = StatisticalTrainer(
     training_path="Datasets/time_domain/training_dataset.pkl",
     validating_path="Datasets/time_domain/validating_dataset.pkl",
     testing_path="Datasets/time_domain/testing_dataset.pkl", 
-    criterion=nn.CrossEntropyLoss()
+    criterion=nn.BCELoss()
 )
-net, metrics_dict = trainer.train_model(ClassicalNeuralNetwork, config)
+net, metrics_dict = trainer.train_model(QuantumNeuralNetwork, config)
 
 # Visualize results
 plotter = DataVisualizer(language="english")
