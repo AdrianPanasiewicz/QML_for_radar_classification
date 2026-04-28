@@ -2,31 +2,32 @@
 
 Synthetic radar return signals are generated using the **Martin-Mulgrew model**, which captures the micro-Doppler signatures produced by rotating drone blades. These signals are used to benchmark classical and quantum classification approaches.
 
-The project is structured into two main pipelines: 
+The project is structured into three main pipelines: 
 1. **Synthetic Dataset Generation** — Simulating radar returns across varying Signal-to-Noise Ratios (SNR) in both the time and frequency domains.
-2. **Model Training & Evaluation** — Tuning and evaluating classical and quantum neural networks using `Optuna` and `Ray Tune`.
+2. **Hyperparameter Tuning** — Finding the best classical and quantum model architectures using `Optuna`.
+3. **Statistical Evaluation** — Running multiple training trials to calculate metrics and visualize performance.
 
 ## Methods
 
 ### Signal & Dataset Generation
 The Martin-Mulgrew model parametrises each drone by blade count `N`, blade lengths `L_1`/`L_2`, and rotor frequency `f_rot`. Signals are generated synthetically for five drone classes: DJI Matrice 300 RTK, DJI Mavic Air 2, DJI Mavic Mini, DJI Phantom 4, and Parrot Disco.
 
-The `SyntheticDatasetGenerator` pipeline handles:
+The `SyntheticDatasetGenerator` handles:
 - **Context definitions:** Varying radar parameters such as distance (`R`), radial velocity (`V_rad`), viewing angles (`θ`, `Φ_p`), and SNR.
 - **Noise injection:** Applying Additive White Gaussian Noise (AWGN) to simulate real-world radar conditions.
 - **Domain representations:** Generating datasets in both the **time domain** (raw complex signals) and **frequency domain** (spectrograms via STFT).
 
 ### Classification Models
-Three primary classifiers are implemented and evaluated:
-- **Classical Neural Network (DNN)** — PyTorch-based models for baseline classification.
-- **Quantum Neural Network (QNN)** — Quantum models built with PennyLane, supporting varying ansatz designs (basic, entangling, random) and encoding schemes (angle, amplitude).
+The following classifiers are implemented and evaluated:
+- **Classical Neural Network (CNN / DNN)** — PyTorch-based models for baseline classification.
+- **Quantum Neural Network (QNN)** — Hybrid models built with PennyLane/Qiskit, supporting varying ansatz designs (basic, entangling, random) and encoding schemes (angle, amplitude).
 - **Quantum Support Vector Machine (QSVM)** *(Planned/WIP)*
 
-### Training & Hyperparameter Tuning
+### Training, Tuning & Visualization
 The training pipeline features:
-- **Optuna Integration:** Automated hyperparameter optimization for model architecture (layers, neurons, dropout, quantum ansatz) and training parameters (learning rate, batch size, regularization).
-- **Statistical Evaluation:** `StatisticalTrainer` for running multiple training trials to calculate performance metrics (accuracy, precision, recall, F1, and confusion matrices).
-- **Visualization:** `DataVisualizer` for plotting spectrograms and statistical training results (means and standard deviations across runs).
+- **Optuna Integration:** Automated hyperparameter optimization for model architecture and training parameters via `HyperparameterTrainer`.
+- **Statistical Evaluation:** `StatisticalTrainer` for executing multiple full training loops to gather statistically significant performance metrics.
+- **Visualization:** `DataVisualizer` for plotting training curves, spectrograms, and formatted confusion matrices.
 
 ## Installation
 
@@ -86,15 +87,14 @@ trainer = HyperparameterTrainer(
 )
 
 def objective(trial):
-    # Suggest model and training hyperparameters
     config = {
         "model_config": {
-            "layers": trial.suggest_categorical("layers", ),[1][2][3][4][5]
+            "layers": trial.suggest_categorical("layers", ),[1][2][3][4]
             "neurons_per_layer": 256,
             "dropout_rate": trial.suggest_float("dropout_rate", 0.0, 0.5)
         },
         "training_config": {
-            "batch_size": trial.suggest_categorical("batch_size", ),[3][4][5][6]
+            "batch_size": trial.suggest_categorical("batch_size", ),[4][5][6]
             "device": "cuda",
             "epochs": 20,
             "optimizer": {"name": "Adam", "lr": trial.suggest_float("lr", 1e-4, 1e-1, log=True), "weight_decay": 1e-5},
@@ -107,4 +107,63 @@ def objective(trial):
 
 study = optuna.create_study(direction="maximize")
 study.optimize(objective, n_trials=50)
+```
+
+### 3. Statistical Evaluation & Visualization
+Once the best hyperparameters are found, use the `StatisticalTrainer` to train the model multiple times. This allows you to evaluate stability and generate visuals like confusion matrices and loss curves.
+
+```python
+import torch
+from torch import nn
+from MachineLearning.Trainers.statistical_trainer import StatisticalTrainer
+from MachineLearning.Processing.data_visualizer import DataVisualizer
+from MachineLearning.Models.experiment_pure.classical_neural_network import ClassicalNeuralNetwork
+
+config = {
+    "model_config": {
+        "layers": 4,
+        "neurons_per_layer": 128,
+        "dropout_rate": 0.2
+    },
+    "training_config": {
+        "number_of_training_workers": 4,
+        "number_of_validating_workers": 2,
+        "number_of_testing_workers": 2,
+        "batch_size": 32,
+        "device": "cuda" if torch.cuda.is_available() else "cpu",
+        "epochs": 100,
+        "number_of_trials": 10, # Run training 10 separate times
+        "optimizer": {
+            "name": "Adam",
+            "lr": 1e-4,
+            "momentum": 0.8,
+            "weight_decay": 1e-6
+        },
+        "regularization": {
+            "type": "l1",
+            "lambda": 1e-6
+        },
+    }
+}
+
+# Run the statistical trainer
+trainer = StatisticalTrainer(
+    training_path="Datasets/time_domain/training_dataset.pkl",
+    validating_path="Datasets/time_domain/validating_dataset.pkl",
+    testing_path="Datasets/time_domain/testing_dataset.pkl", 
+    criterion=nn.CrossEntropyLoss()
+)
+net, metrics_dict = trainer.train_model(ClassicalNeuralNetwork, config)
+
+# Visualize results
+plotter = DataVisualizer(language="english")
+
+# Display the confusion matrix
+plotter.plot_confusion_matrix(metrics_dict, significant_digits=1)
+
+# Display tabular metrics (Accuracy, Precision, Recall, F1)
+print(plotter.get_metrics_table(metrics_dict, significant_digits=3))
+
+# Plot training vs validation accuracy/loss over epochs
+plotter.plot_training_chart(metrics_dict)
 ```
