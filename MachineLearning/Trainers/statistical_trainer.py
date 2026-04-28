@@ -6,7 +6,7 @@ import torch
 from torch.optim import SGD, Adam
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 from MachineLearning.Trainers.abstract_trainer import AbstractTrainer
 from MachineLearning.Models.experiment_pure.classical_neural_network import ClassicalNeuralNetwork
 from MachineLearning.Models.experiment_pure.quantum_neural_network import QuantumNeuralNetwork
@@ -43,23 +43,26 @@ class StatisticalTrainer(AbstractTrainer):
         model_config = config["model_config"]
 
         device = training_config["device"]
-        data_array_all_runs = []
+
+        metrics_dictionary = {
+            "training_data": list(),
+            "testing_data": list(),
+        }
 
         trainloader = DataLoader(self.trainset,
                                  batch_size=int(training_config["batch_size"]),
                                  shuffle=True,
-                                 num_workers=4,
+                                 num_workers=training_config["number_of_training_workers"],
                                  pin_memory=False if training_config["device"]=="cpu" else True,
                                  persistent_workers=True
                                  )
         valloader = DataLoader(self.valset,
                                batch_size=int(training_config["batch_size"]),
                                shuffle=False,
-                               num_workers=2,
+                               num_workers=training_config["number_of_validating_workers"],
                                pin_memory=False if training_config["device"]=="cpu" else True,
                                persistent_workers=True
                                )
-
 
         for model_run in tqdm(range(training_config['number_of_trials']), desc="Model runs"):
 
@@ -93,13 +96,22 @@ class StatisticalTrainer(AbstractTrainer):
                 for inputs, labels in trainloader:
                     inputs, labels = inputs.to(device), labels.to(device)
                     optimizer.zero_grad()
+                    outputs = net(inputs).squeeze()
+
                     if isinstance(net, QuantumNeuralNetwork):
-                        outputs = net(inputs).squeeze()
-                        probs = (outputs + 1.0) / 2.0
+                        probs = torch.clamp((outputs + 1.0) / 2.0, 0.0, 1.0)
                         loss = self.criterion(probs, labels.float())
                     else:
-                        outputs = net(inputs)
-                        loss = self.criterion(outputs, labels)
+                        loss = self.criterion(outputs, labels.long())
+
+                    if training_config["regularization"]["type"] is not None:
+                        if training_config["regularization"]['type'] == 'l1':
+                            penality = sum(p.abs().sum() for p in net.parameters())
+                            loss = loss + training_config["regularization"]["lambda"] * penality
+
+                        elif training_config['regularization']['type'] == 'l2':
+                            penality = sum((p ** 2).sum() for p in net.parameters())
+                            loss = loss + training_config["regularization"]["lambda"] * penality
 
                     loss.backward()
                     optimizer.step()
@@ -115,14 +127,23 @@ class StatisticalTrainer(AbstractTrainer):
                         inputs, labels = inputs.to(device), labels.to(device)
                         if isinstance(net, QuantumNeuralNetwork):
                             outputs = net(inputs).squeeze()
-                            probs = (outputs + 1.0) / 2.0
+                            probs = torch.clamp((outputs + 1.0) / 2.0, 0.0, 1.0)
                             loss = self.criterion(probs, labels.float())
                             predicted = (outputs >= 0).long()
 
                         else:
                             outputs = net(inputs)
-                            loss = self.criterion(outputs, labels)
+                            loss = self.criterion(outputs, labels.long())
                             predicted = outputs.argmax(dim=1)
+
+                        if training_config["regularization"]["type"] is not None:
+                            if training_config["regularization"]['type'] == 'l1':
+                                penality = sum(p.abs().sum() for p in net.parameters())
+                                loss = loss + training_config["regularization"]["lambda"] * penality
+
+                            elif training_config['regularization']['type'] == 'l2':
+                                penality = sum((p ** 2).sum() for p in net.parameters())
+                                loss = loss + training_config["regularization"]["lambda"] * penality
 
                         val_loss += loss.item()
                         val_steps += 1
@@ -134,12 +155,58 @@ class StatisticalTrainer(AbstractTrainer):
                 data_dict_per_epoch["validation_loss"].append(val_loss / val_steps)
                 data_dict_per_epoch["accuracy"].append(100 * correct / total)
 
-            data_array_all_runs.append(data_dict_per_epoch)
+            metrics = self.test_model(net, training_config["device"], training_config["number_of_testing_workers"])
+
+            metrics_dictionary["training_data"].append(data_dict_per_epoch)
+            metrics_dictionary["testing_data"].append(metrics)
+
             gc.collect()
 
         del trainloader
         del valloader
-        return data_array_all_runs
 
-    def test_model(self, model):
-        pass
+        return net, metrics_dictionary
+
+    def test_model(self, model, device="cpu", num_workers=2):
+
+        model = model.to(device)
+        testloader = DataLoader(
+            self.testset,
+            num_workers=num_workers
+        )
+
+        model.eval()
+        all_preds, all_labels = [], []
+        with torch.no_grad():
+            for inputs, labels in testloader:
+                inputs, labels = inputs.to(device), labels.to(device)
+                outputs = model(inputs)
+                _, preds = torch.max(outputs.data, 1)
+
+                all_preds.append(preds)
+                all_labels.append(labels)
+
+
+        all_preds = torch.cat(all_preds)
+        all_labels = torch.cat(all_labels)
+        metrics = self.calculate_metrics(all_labels,all_preds)
+
+        return metrics
+
+    def calculate_metrics(self, labels, predictions):
+
+        tn, fp, fn, tp = confusion_matrix(labels, predictions).ravel()
+        accuracy = accuracy_score(labels, predictions)
+        balanced_acc = balanced_accuracy_score(labels, predictions)
+        precision = precision_score(labels, predictions, zero_division=0)
+        recall = recall_score(labels, predictions, zero_division=0)
+        f1 = f1_score(labels, predictions, zero_division=0)
+
+        return {
+            'accuracy': accuracy,
+            'balanced_accuracy': balanced_acc,
+            'precision': precision,
+            'recall': recall,
+            'f1': f1,
+            'confusion_matrix': {'TP': tp, 'TN': tn, 'FP': fp, 'FN': fn}
+        }

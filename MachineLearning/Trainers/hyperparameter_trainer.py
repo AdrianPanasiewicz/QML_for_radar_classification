@@ -171,25 +171,23 @@ class HyperparameterTrainer(AbstractTrainer):
 
         del trainloader
         del valloader
-        gc.collect()
         
         return accuracy
 
 
-    def test_model(self, model, device="cpu"):
+    def test_model(self, net, device="cpu"):
         testloader = DataLoader(self.testset, batch_size=32, shuffle=True)
 
-        model.eval()
-        val_loss = 0.0
+        net.eval()
         all_preds, all_labels = [], []
         with torch.no_grad():
             for inputs, labels in testloader:
                 inputs, labels = inputs.to(device), labels.to(device)
-                outputs = model(inputs)
-                _, preds = torch.max(outputs.data, 1)
-
-                loss = self.criterion(outputs, labels)
-                val_loss += loss.item() * inputs.size(0)
+                outputs = net(inputs)
+                if isinstance(net, QuantumNeuralNetwork):
+                    preds = 0 if outputs < 0 else 1
+                else:
+                    _, preds = torch.max(outputs.data, 1)
 
                 all_preds.append(preds)
                 all_labels.append(labels)
