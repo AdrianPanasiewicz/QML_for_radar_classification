@@ -6,8 +6,8 @@ from matplotlib import pyplot as plt
 
 
 class FrequencyDomainDataParser(DataParser):
-	def __init__(self):
-		super().__init__()
+	def __init__(self, language="english"):
+		super().__init__(language)
 
 	def parse_data_object(self, dataset_obj, bin_size=1, return_mag = False):
 		signal, label, misc_data = self.extract_training_data_and_label(dataset_obj)
@@ -48,24 +48,28 @@ class FrequencyDomainDataParser(DataParser):
 		return self.class_map[label]
 
 	def plot_drone_spectrogram(self, time_signal, misc_data):
+		labels = self.get_labels("spectrogram")
 
 		f_pts = time_signal.shape[1]
 		delta_t = 16 * misc_data.context.dt
 		delta_f = (1 / misc_data.context.dt) / 32
 
 		fig, axs = plt.subplots(2, 1, figsize=(12, 4), sharex=True, sharey=True)
-		fig.suptitle(f"Drone: {misc_data.drone.name}")
+		fig.suptitle(labels["figure_title"].format(
+			drone_name=misc_data.drone.name,
+			snr=misc_data.context.snr
+		))
 
-		fig.supxlabel(f"Time t (dt={delta_t:g} s) [s]")
-		fig.supylabel(f"Freq. f ({f_pts} bins, df={delta_f:g} Hz) [Hz]")
+		fig.supxlabel(labels["xlabel"].format(delta_t=delta_t))
+		fig.supylabel(labels["ylabel"].format(f_pts=f_pts, delta_f=delta_f))
 
 		im1 = axs[0].imshow(time_signal[0], origin='lower', aspect='auto', cmap='viridis')
-		axs[0].set_title("Real")
-		fig.colorbar(im1, ax=axs[0], label="Magnitude |S(t,f)|")
+		axs[0].set_title(labels["real_title"])
+		fig.colorbar(im1, ax=axs[0], label=labels["colorbar"])
 
 		im2 = axs[1].imshow(time_signal[1], origin='lower', aspect='auto', cmap='viridis')
-		axs[1].set_title("Imag.")
-		fig.colorbar(im2, ax=axs[1], label="Magnitude |S(t,f)|")
+		axs[1].set_title(labels["imag_title"])
+		fig.colorbar(im2, ax=axs[1], label=labels["colorbar"])
 
 		fig.tight_layout()
 		plt.show()
