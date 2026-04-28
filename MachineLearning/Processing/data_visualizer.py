@@ -29,9 +29,9 @@ class DataVisualizer:
                     "std" : "Standard deviation",
                     "accuracy": "Accuracy",
                     "balanced_accuracy": "Balanced accuracy",
-                    "precision": "Precision",
-                    "recall": "Recall",
-                    "f1": "F1-score"
+                    "precision": "Macro-Precision",
+                    "recall": "Macro-Recall",
+                    "f1": "Macro-F1-score"
                 }
             },
             "polish": {
@@ -56,9 +56,9 @@ class DataVisualizer:
                     "std": "Odchylenie standardowe",
                     "accuracy": "Dokładność",
                     "balanced_accuracy": "Zbalansowana dokładność",
-                    "precision": "Precyzja",
-                    "recall": "Czułość",
-                    "f1": "Wynik F1"
+                    "precision": "Macro-Precyzja",
+                    "recall": "Macro-Czułość",
+                    "f1": "Macro-Wynik F1"
                 }
             }
         }

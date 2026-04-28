@@ -199,9 +199,9 @@ class StatisticalTrainer(AbstractTrainer):
         tn, fp, fn, tp = confusion_matrix(labels, predictions).ravel()
         accuracy = accuracy_score(labels, predictions)
         balanced_acc = balanced_accuracy_score(labels, predictions)
-        precision = precision_score(labels, predictions, zero_division=0)
-        recall = recall_score(labels, predictions, zero_division=0)
-        f1 = f1_score(labels, predictions, zero_division=0)
+        precision = precision_score(labels, predictions, zero_division=0, average='macro')
+        recall = recall_score(labels, predictions, zero_division=0, average='macro')
+        f1 = f1_score(labels, predictions, zero_division=0, average='macro')
 
         return {
             'accuracy': accuracy,

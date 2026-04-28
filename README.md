@@ -49,9 +49,12 @@ pip install -r requirements.txt
 ## Usage Examples
 
 ### 1. Generating a Synthetic Dataset
+
 ```python
 from Data.Primitives.presets import drones_array, default_radar
-from Data.Generators.synthetic_dataset_generator import DatasetMetadata, DataRequest, SyntheticDatasetGenerator
+from Data.Generators.synthetic_dataset_generator import DatasetMetadata, DataRequest,
+
+SyntheticDatasetGenerator
 from Data.Primitives.environment_classes import Context
 from Data.Primitives.noise_models import AdditiveWhiteGaussianNoise
 
@@ -64,12 +67,12 @@ dataset_gen = SyntheticDatasetGenerator(dataset_metadata=md)
 
 # Generate requests for all drone classes
 requests = [
-    DataRequest(f"label={drone.name}", drone, default_radar, context, AdditiveWhiteGaussianNoise(), sample_size=70)
-    for drone in drones_array
+	DataRequest(f"label={drone.name}", drone, default_radar, context, AdditiveWhiteGaussianNoise(), sample_size=70)
+	for drone in drones_array
 ]
 
 dataset_gen.append_data_requests(requests)
-dataset_gen.generate_signal_data(stft_form=False) # Set to True for frequency domain
+dataset_gen.generate_signal_data(stft_form=False)  # Set to True for frequency domain
 ```
 
 ### 2. Hyperparameter Tuning with Optuna
