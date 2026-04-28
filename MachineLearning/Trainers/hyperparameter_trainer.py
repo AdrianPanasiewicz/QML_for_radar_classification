@@ -14,7 +14,6 @@ from MachineLearning.Trainers.abstract_trainer import AbstractTrainer
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 from MachineLearning.Models.experiment_pure.quantum_neural_network import QuantumNeuralNetwork
 
-
 class HyperparameterTrainer(AbstractTrainer):
     def __init__(self, training_path, validating_path, testing_path , criterion):
         super().__init__(training_path, validating_path, testing_path, criterion)

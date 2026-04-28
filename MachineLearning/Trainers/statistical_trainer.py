@@ -11,10 +11,6 @@ from MachineLearning.Trainers.abstract_trainer import AbstractTrainer
 from MachineLearning.Models.experiment_pure.classical_neural_network import ClassicalNeuralNetwork
 from MachineLearning.Models.experiment_pure.quantum_neural_network import QuantumNeuralNetwork
 
-MODEL_REGISTRY = {
-    "ClassicalNeuralNetwork": ClassicalNeuralNetwork,
-}
-
 
 class StatisticalTrainer(AbstractTrainer):
     def __init__(self, training_path, validating_path, testing_path, criterion):
@@ -181,11 +177,13 @@ class StatisticalTrainer(AbstractTrainer):
             for inputs, labels in testloader:
                 inputs, labels = inputs.to(device), labels.to(device)
                 outputs = model(inputs)
-                _, preds = torch.max(outputs.data, 1)
+                if isinstance(model, QuantumNeuralNetwork):
+                    preds = (outputs >= 0).long()
+                else:
+                    _, preds = torch.max(outputs.data, 1)
 
                 all_preds.append(preds)
                 all_labels.append(labels)
-
 
         all_preds = torch.cat(all_preds)
         all_labels = torch.cat(all_labels)

@@ -1,11 +1,9 @@
+from Data.Primitives.presets import class_map
 from abc import ABC, abstractmethod
 
 class DataParser(ABC):
 	def __init__(self, language="english"):
-		self.class_map = {
-			"DJI_Mavic_Mini":		0,
-			"Parrot_Disco":			1,
-		 }
+		self.class_map = { key: i for i, key in enumerate(class_map)}
 
 		self.translations = {
 			"english": {

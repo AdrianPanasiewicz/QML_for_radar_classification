@@ -1,3 +1,5 @@
+from Data.Primitives.presets import class_map
+from IPython.display import HTML
 from matplotlib import pyplot as plt
 import torch
 
@@ -16,7 +18,20 @@ class DataVisualizer:
                 "confusion_matrix": {
                     "title": "Confusion Matrix",
                     "xlabel": "Predicted label",
-                    "ylabel": "True label"
+                    "ylabel": "True label",
+                    "x_tick_labels": [class_map[0], class_map[1]],
+                    "y_tick_labels": [class_map[0], class_map[1]],
+                    "colorbar": "Mean count"
+                },
+                "table_output": {
+                    "metric": "Metric",
+                    "mean" : "Expectation value",
+                    "std" : "Standard deviation",
+                    "accuracy": "Accuracy",
+                    "balanced_accuracy": "Balanced accuracy",
+                    "precision": "Precision",
+                    "recall": "Recall",
+                    "f1": "F1-score"
                 }
             },
             "polish": {
@@ -30,7 +45,20 @@ class DataVisualizer:
                 "confusion_matrix": {
                     "title": "Macierz pomyłek",
                     "xlabel": "Etykieta przewidziana",
-                    "ylabel": "Etykieta rzeczywista"
+                    "ylabel": "Etykieta rzeczywista",
+                    "x_tick_labels": [class_map[0], class_map[1]],
+                    "y_tick_labels": [class_map[0], class_map[1]],
+                    "colorbar": "Średnia liczba"
+                },
+                "table_output": {
+                    "metric": "Metryka",
+                    "mean": "Wartość oczekiwana",
+                    "std": "Odchylenie standardowe",
+                    "accuracy": "Dokładność",
+                    "balanced_accuracy": "Zbalansowana dokładność",
+                    "precision": "Precyzja",
+                    "recall": "Czułość",
+                    "f1": "Wynik F1"
                 }
             }
         }
@@ -68,8 +96,94 @@ class DataVisualizer:
         ax.set_xlabel(labels["epoch"])
         ax.set_ylabel(labels["accuracy"])
         ax.set_title(labels["title"])
-        ax.grid(True, alpha=0.3)
+        ax.grid(True, alpha=0.8)
         ax.legend()
         fig.tight_layout()
 
         return fig, ax
+
+    def plot_confusion_matrix(self, metrics_dict, significant_digits=2):
+        labels = self.desc_dictionary["confusion_matrix"]
+        confusion_tensor = {
+            key : torch.tensor([run["confusion_matrix"][key] for run in metrics_dict["testing_data"]], dtype=torch.float32)
+            for key in ("TP", "TN", "FP", "FN")
+        }
+        stats = {key : self.calculate_statistics(confusion_tensor[key]) for key in ("TP", "TN", "FP", "FN")}
+
+        mean_matrix = torch.tensor([
+            [stats["TN"][0], stats["FP"][0]],
+            [stats["FN"][0], stats["TP"][0]]
+        ])
+
+        std_matrix = torch.tensor([
+            [stats["TN"][1], stats["FP"][1]],
+            [stats["FN"][1], stats["TP"][1]]
+        ])
+
+        fig, ax = plt.subplots(figsize=(6, 5))
+        im = ax.imshow(mean_matrix.numpy(), cmap="Blues")
+
+        ax.set_xticks([0, 1], labels=labels["x_tick_labels"])
+        ax.set_yticks([0, 1], labels=labels["y_tick_labels"])
+        ax.set_xlabel(labels["xlabel"], labelpad=14)
+        ax.set_ylabel(labels["ylabel"], labelpad=14)
+        ax.set_title(labels["title"], pad=14)
+
+        threshold = mean_matrix.max().item() / 2
+
+        for i in range(2):
+            for j in range(2):
+                value = mean_matrix[i, j].item()
+                std = std_matrix[i, j].item()
+                text_color = "white" if value > threshold else "black"
+                ax.text(
+                    j,
+                    i,
+                    f"{value:.{significant_digits}f}\n±{std:.{significant_digits}f}",
+                    ha="center",
+                    va="center",
+                    color=text_color,
+                    fontsize=11,
+                    fontweight="bold"
+                )
+
+        cbar = fig.colorbar(im, ax=ax)
+        cbar.set_label(labels["colorbar"], labelpad=14)
+
+        fig.tight_layout()
+        return fig, ax
+
+    def get_metrics_table(self, metrics_dict, significant_digits=4):
+        labels = self.desc_dictionary["table_output"]
+        metrics_tensor = {
+            key : torch.tensor([run[key] for run in metrics_dict["testing_data"]], dtype=torch.float32)
+            for key in ("accuracy", "balanced_accuracy", "precision", "recall", "f1")
+        }
+        stats = {
+            key : self.calculate_statistics(metrics_tensor[key])
+            for key in ("accuracy", "balanced_accuracy", "precision", "recall", "f1")
+        }
+
+        rows = []
+        for key in ("accuracy", "balanced_accuracy", "precision", "recall", "f1"):
+            mean, std = stats[key]
+            rows.append(
+                f"<tr><td>{labels[key]}</td><td>{mean.item():.{significant_digits}f} ± {std.item():.{significant_digits}f}</td></tr>"
+            )
+
+        html = f"""
+            <table>
+                <thead>
+                    <tr>
+                        <th>{labels['metric']}</th>
+                        <th>{labels['mean']} ± {labels['std']}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {''.join(rows)}
+                </tbody>
+            </table>
+            """
+        return HTML(html)
+
+
