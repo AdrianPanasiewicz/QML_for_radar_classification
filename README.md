@@ -1,4 +1,4 @@
-# Drone Classification from Radar Data
+# Drone Classification from Radar Data via Quantum Machine Learning
 
 Synthetic radar return signals are generated using the **Martin-Mulgrew model**, which captures the micro-Doppler signatures produced by rotating drone blades. These signals are used to benchmark classical and quantum classification approaches.
 
