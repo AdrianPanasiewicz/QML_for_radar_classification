@@ -70,7 +70,7 @@ class DataVisualizer:
         stds = data_array.std(dim=0)
         return means, stds
 
-    def plot_training_chart(self, metrics_dict):
+    def plot_training_chart(self, metrics_dict, ax=None, color="tab:blue", label_suffix="", include_stds_labels=True, std_transparency=0.2):
         labels = self.desc_dictionary["training_chart"]
 
         training_accuracy_array = torch.tensor(
@@ -79,26 +79,33 @@ class DataVisualizer:
         )
 
         means, stds = self.calculate_statistics(training_accuracy_array)
-
         epochs = range(1, len(means) + 1)
 
-        fig, ax = plt.subplots(figsize=(8, 5))
-        ax.plot(epochs, means, color="tab:blue", linewidth=2, label=labels["mean_accuracy"])
+        fig = None
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(8, 5))
+
+        mean_label = f"{labels['mean_accuracy']} {label_suffix}".strip()
+        std_label = f"{labels['std_band']} {label_suffix}".strip()
+
+        ax.plot(epochs, means, color=color, linewidth=2, label=mean_label)
         ax.fill_between(
             epochs,
             means - stds,
             means + stds,
-            color="tab:blue",
-            alpha=0.2,
-            label=labels["std_band"]
+            color=color,
+            alpha=std_transparency,
+            label=labels["std_band"] if include_stds_labels else None
         )
 
         ax.set_xlabel(labels["epoch"])
         ax.set_ylabel(labels["accuracy"])
         ax.set_title(labels["title"])
         ax.grid(True, alpha=0.8)
-        ax.legend()
-        fig.tight_layout()
+
+        if fig is not None:
+            ax.legend()
+            fig.tight_layout()
 
         return fig, ax
 
@@ -129,7 +136,7 @@ class DataVisualizer:
         ax.set_ylabel(labels["ylabel"], labelpad=14)
         ax.set_title(labels["title"], pad=14)
 
-        threshold = mean_matrix.max().item() / 2
+        threshold = (mean_matrix.max().item() + mean_matrix.min().item()) / 2
 
         for i in range(2):
             for j in range(2):
@@ -186,4 +193,15 @@ class DataVisualizer:
             """
         return HTML(html)
 
+    def get_metrics(self, metrics_dict):
+        labels = self.desc_dictionary["table_output"]
+        metrics_tensor = {
+            key : torch.tensor([run[key] for run in metrics_dict["testing_data"]], dtype=torch.float32)
+            for key in ("accuracy", "balanced_accuracy", "precision", "recall", "f1")
+        }
+        stats = {
+            key : self.calculate_statistics(metrics_tensor[key])
+            for key in ("accuracy", "balanced_accuracy", "precision", "recall", "f1")
+        }
 
+        return stats

@@ -125,40 +125,40 @@ from MachineLearning.Processing.data_visualizer import DataVisualizer
 from MachineLearning.Models.experiment_pure.quantum_neural_network import QuantumNeuralNetwork
 
 config = {
-        model_config = {
-        "n_qubits"  : 10,
-        "layers"    : 2,
-        "encoding"  : "angle",
-        "ansatz"    : "basic",
-        "simulator" : 'default.qubit',
-    },
-    "training_config": {
-        "number_of_training_workers": 4,
-        "number_of_validating_workers": 2,
-        "number_of_testing_workers": 2,
-        "batch_size": 32,
-        "device": "cuda" if torch.cuda.is_available() else "cpu",
-        "epochs": 100,
-        "number_of_trials": 10, # Run training 10 separate times
-        "optimizer": {
-            "name": "Adam",
-            "lr": 1e-4,
-            "momentum": 0.8,
-            "weight_decay": 1e-6
-        },
-        "regularization": {
-            "type": "l1",
-            "lambda": 1e-6
-        },
-    }
+	model_config = {
+	"n_qubits": 10,
+	"layers": 2,
+	"encoding": "angle",
+	"ansatz": "basic",
+	"simulator": 'default.qubit',
+},
+"training_config": {
+	"number_of_training_workers": 4,
+	"number_of_validating_workers": 2,
+	"number_of_testing_workers": 2,
+	"batch_size": 32,
+	"device": "cuda" if torch.cuda.is_available() else "cpu",
+	"epochs": 100,
+	"number_of_trials": 10,  # Run training 10 separate times
+	"optimizer": {
+		"name": "Adam",
+		"lr": 1e-4,
+		"momentum": 0.8,
+		"weight_decay": 1e-6
+	},
+	"regularization": {
+		"type": "l1",
+		"lambda": 1e-6
+	},
+}
 }
 
 # Run the statistical trainer
 trainer = StatisticalTrainer(
-    training_path="Datasets/time_domain/training_dataset.pkl",
-    validating_path="Datasets/time_domain/validating_dataset.pkl",
-    testing_path="Datasets/time_domain/testing_dataset.pkl", 
-    criterion=nn.BCELoss()
+	training_path="Datasets/time_domain/training_dataset.pkl",
+	validating_path="Datasets/time_domain/validating_dataset.pkl",
+	testing_path="Datasets/time_domain/testing_dataset.pkl",
+	criterion=nn.BCELoss()
 )
 net, metrics_dict = trainer.train_model(QuantumNeuralNetwork, config)
 
@@ -169,7 +169,7 @@ plotter = DataVisualizer(language="english")
 plotter.plot_confusion_matrix(metrics_dict, significant_digits=1)
 
 # Display tabular metrics (Accuracy, Precision, Recall, F1)
-print(plotter.get_metrics_table(metrics_dict, significant_digits=3))
+print(plotter.get_metrics(metrics_dict, significant_digits=3))
 
 # Plot training vs validation accuracy/loss over epochs
 plotter.plot_training_chart(metrics_dict)
