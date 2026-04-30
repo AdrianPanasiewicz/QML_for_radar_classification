@@ -137,16 +137,22 @@ class DataVisualizer:
         ax.set_title(labels["title"], pad=14)
 
         threshold = (mean_matrix.max().item() + mean_matrix.min().item()) / 2
+        total_inferences = mean_matrix.sum().item()
 
         for i in range(2):
             for j in range(2):
                 value = mean_matrix[i, j].item()
                 std = std_matrix[i, j].item()
+
+                percentage = (value / total_inferences) * 100 if total_inferences > 0 else 0
+                percentage_std = (std / total_inferences) * 100 if total_inferences > 0 else 0
+
                 text_color = "white" if value > threshold else "black"
+
                 ax.text(
                     j,
                     i,
-                    f"{value:.{significant_digits}f}\n±{std:.{significant_digits}f}",
+                    f"{percentage:.1f}% ± {percentage_std:.1f}%\n({value:.{significant_digits}f} ± {std:.{significant_digits}f})",
                     ha="center",
                     va="center",
                     color=text_color,
