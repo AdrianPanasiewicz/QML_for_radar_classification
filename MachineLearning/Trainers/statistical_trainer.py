@@ -7,9 +7,16 @@ from torch.optim import SGD, Adam
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from sklearn.svm import SVC
+from sklearn.pipeline import Pipeline, make_pipeline
+from sklearn.preprocessing import StandardScaler
+import numpy as np
+
 from MachineLearning.Trainers.abstract_trainer import AbstractTrainer
 from MachineLearning.Models.experiment_pure.classical_neural_network import ClassicalNeuralNetwork
 from MachineLearning.Models.experiment_pure.quantum_neural_network import QuantumNeuralNetwork
+from MachineLearning.Models.experiment_pure.classical_support_vector_machine import SupportVectorMachine
+from MachineLearning.Models.experiment_pure.quantum_support_vector_machine import QuantumSupportVectorMachine
 
 
 class StatisticalTrainer(AbstractTrainer):
@@ -44,6 +51,37 @@ class StatisticalTrainer(AbstractTrainer):
             "training_data": list(),
             "testing_data": list(),
         }
+
+        if model_class == SupportVectorMachine:
+
+            X_train, y_train = self._dataset_to_numpy(self.trainset)
+            X_val, y_val = self._dataset_to_numpy(self.valset)
+
+            clf = make_pipeline(
+                StandardScaler(),
+                SupportVectorMachine(
+                    kernel=model_config.get("kernel", "rbf"),
+                    C=model_config.get("C", 1.0),
+                    gamma=model_config.get("gamma", "scale"),
+                    degree=model_config.get("degree", 3),
+                    coef0=model_config.get("coef0", 0.0),
+                )
+            )
+
+            clf.fit(X_train, y_train)
+
+            val_preds = clf.predict(X_val)
+            val_metrics = self.calculate_metrics(y_val, val_preds)
+
+            metrics_dictionary["training_data"].append({
+                "accuracy": [100 * val_metrics["accuracy"]],
+                "validation_loss": [None]
+            })
+
+            metrics = self.test_model(clf)
+            metrics_dictionary["testing_data"].append(metrics)
+
+            return clf, metrics_dictionary
 
         trainloader = DataLoader(self.trainset,
                                  batch_size=int(training_config["batch_size"]),
@@ -92,12 +130,13 @@ class StatisticalTrainer(AbstractTrainer):
                 for inputs, labels in trainloader:
                     inputs, labels = inputs.to(device), labels.to(device)
                     optimizer.zero_grad()
-                    outputs = net(inputs).squeeze()
 
                     if isinstance(net, QuantumNeuralNetwork):
+                        outputs = net(inputs).squeeze()
                         probs = torch.clamp((outputs + 1.0) / 2.0, 0.0, 1.0)
                         loss = self.criterion(probs, labels.float())
-                    else:
+                    elif isinstance(net, ClassicalNeuralNetwork):
+                        outputs = net(inputs).squeeze()
                         loss = self.criterion(outputs, labels.long())
 
                     if training_config["regularization"]["type"] is not None:
@@ -127,7 +166,7 @@ class StatisticalTrainer(AbstractTrainer):
                             loss = self.criterion(probs, labels.float())
                             predicted = (outputs >= 0).long()
 
-                        else:
+                        elif isinstance(net, ClassicalNeuralNetwork):
                             outputs = net(inputs)
                             loss = self.criterion(outputs, labels.long())
                             predicted = outputs.argmax(dim=1)
@@ -163,7 +202,19 @@ class StatisticalTrainer(AbstractTrainer):
 
         return net, metrics_dictionary
 
+    def _dataset_to_numpy(self, dataset):
+        loader = DataLoader(dataset, batch_size=len(dataset), shuffle=False)
+        X, y = next(iter(loader))
+        X = X.detach().cpu().numpy().astype(np.float64, copy=False)
+        y = y.detach().cpu().numpy().astype(np.int64, copy=False)
+        return X, y
+
     def test_model(self, model, device="cpu", num_workers=2):
+
+        if isinstance(model, (SupportVectorMachine, Pipeline)):
+            X_test, y_test = self._dataset_to_numpy(self.testset)
+            preds = model.predict(X_test)
+            return self.calculate_metrics(y_test, preds)
 
         model = model.to(device)
         testloader = DataLoader(
@@ -179,7 +230,7 @@ class StatisticalTrainer(AbstractTrainer):
                 outputs = model(inputs)
                 if isinstance(model, QuantumNeuralNetwork):
                     preds = (outputs >= 0).long()
-                else:
+                elif isinstance(model, ClassicalNeuralNetwork):
                     _, preds = torch.max(outputs.data, 1)
 
                 all_preds.append(preds)
@@ -192,9 +243,16 @@ class StatisticalTrainer(AbstractTrainer):
         return metrics
 
     def calculate_metrics(self, labels, predictions):
+        if torch.is_tensor(labels):
+            labels = labels.detach().cpu().numpy()
+        else:
+            labels = np.asarray(labels)
 
-        labels = labels.detach().cpu()
-        predictions = predictions.detach().cpu()
+        if torch.is_tensor(predictions):
+            predictions = predictions.detach().cpu().numpy()
+        else:
+            predictions = np.asarray(predictions)
+
 
         tn, fp, fn, tp = confusion_matrix(labels, predictions).ravel()
         accuracy = accuracy_score(labels, predictions)

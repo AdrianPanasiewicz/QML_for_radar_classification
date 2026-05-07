@@ -1,32 +1,94 @@
-import pennylane as qml
-from torch import nn
-import torch
+import numpy as np
+from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
 
-class QuantumSupportVectorMachine(nn.Module):
-    def __init__(self, n_qubits, device='default.qubit'):
-        super(QuantumSupportVectorMachine, self).__init__()
-        self.init_kwargs = {"n_qubits": n_qubits, "device": 'default.qubit'}
-        self.model_name = self.__class__.__name__
-        self.n_qubits = n_qubits
-        self.dev = qml.device(device, wires=n_qubits)
+class QuantumSupportVectorMachine(BaseEstimator, ClassifierMixin):
+    def __init__(
+        self,
+        *,
+        C=1.0,
+        kernel="rbf",
+        degree=3,
+        gamma="scale",
+        coef0=0.0,
+        shrinking=True,
+        probability=False,
+        tol=1e-3,
+        cache_size=200,
+        class_weight=None,
+        verbose=False,
+        max_iter=-1,
+        decision_function_shape="ovr",
+        break_ties=False,
+        random_state=None,
+        use_scaler=True,
+        kernel_callable=None
+    ):
+        self.C = C
+        self.kernel = kernel
+        self.degree = degree
+        self.gamma = gamma
+        self.coef0 = coef0
+        self.shrinking = shrinking
+        self.probability = probability
+        self.tol = tol
+        self.cache_size = cache_size
+        self.class_weight = class_weight
+        self.verbose = verbose
+        self.max_iter = max_iter
+        self.decision_function_shape = decision_function_shape
+        self.break_ties = break_ties
+        self.random_state = random_state
+        self.use_scaler = use_scaler
+        self.kernel_callable = kernel_callable
 
-        def quantum_circuit(inputs, weights):
-            qml.AngleEmbedding(inputs, wires=range(n_qubits))
-            qml.BasicEntanglerLayers(weights, wires=range(n_qubits))
-            return [qml.expval(qml.PauliZ(i)) for i in range(n_qubits)]
+    def _resolve_kernel(self):
+        if self.kernel == "callable":
+            if self.kernel_callable is None:
+                raise ValueError("kernel_callable must be provided when kernel='callable'")
+            return self.kernel_callable
+        return self.kernel
 
-        self.qnode = qml.QNode(quantum_circuit, self.dev, interface='torch')
-
-        self.quantum_weights = nn.Parameter(torch.rand((3, self.n_qubits), requires_grad=True))
-        self.classical_layer = nn.Sequential(
-            nn.Linear(n_qubits, 64),
-            nn.ReLU(),
-            nn.Linear(64, 6)
+    def fit(self, X, y):
+        svc = SVC(
+            C=self.C,
+            kernel=self._resolve_kernel(),
+            degree=self.degree,
+            gamma=self.gamma,
+            coef0=self.coef0,
+            shrinking=self.shrinking,
+            probability=self.probability,
+            tol=self.tol,
+            cache_size=self.cache_size,
+            class_weight=self.class_weight,
+            verbose=self.verbose,
+            max_iter=self.max_iter,
+            decision_function_shape=self.decision_function_shape,
+            break_ties=self.break_ties,
+            random_state=self.random_state
         )
 
-    def forward(self, x):
-        x_quantum = torch.tensor(x, dtype=torch.float32)
-        quantum_out = self.qnode(x_quantum, self.quantum_weights)
-        quantum_out = torch.stack(quantum_out, dim=1).to(torch.float32)
-        out = self.classical_layer(quantum_out)
-        return out
+        if self.use_scaler and self.kernel != "precomputed" and self.kernel != "callable":
+            self.model_ = make_pipeline(StandardScaler(), svc)
+        else:
+            self.model_ = svc
+
+        self.model_.fit(X, y)
+        return self
+
+    def predict(self, X):
+        return self.model_.predict(X)
+
+    def decision_function(self, X):
+        return self.model_.decision_function(X)
+
+    def predict_proba(self, X):
+        return self.model_.predict_proba(X)
+
+    def score(self, X, y):
+        return self.model_.score(X, y)
+
+    def quantum_kernel(self):
+        pass

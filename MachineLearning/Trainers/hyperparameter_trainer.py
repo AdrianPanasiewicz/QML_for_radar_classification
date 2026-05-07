@@ -1,18 +1,22 @@
-import tempfile
-from pathlib import Path
 from tqdm import tqdm
+from sklearn.svm import SVC
+from sklearn.pipeline import Pipeline, make_pipeline
+from sklearn.preprocessing import StandardScaler
+import numpy as np
 import torch
 import os
 import gc
 from torch import nn
 from torch.utils.data import DataLoader
-from torch.optim import SGD, Adam, LBFGS
+from torch.optim import SGD, Adam
 from ray import tune
 import optuna
 from ray.tune import Checkpoint
 from MachineLearning.Trainers.abstract_trainer import AbstractTrainer
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 from MachineLearning.Models.experiment_pure.quantum_neural_network import QuantumNeuralNetwork
+from MachineLearning.Models.experiment_pure.classical_neural_network import ClassicalNeuralNetwork
+from MachineLearning.Models.experiment_pure.classical_support_vector_machine import SupportVectorMachine
 
 class HyperparameterTrainer(AbstractTrainer):
     def __init__(self, training_path, validating_path, testing_path , criterion):
@@ -21,6 +25,32 @@ class HyperparameterTrainer(AbstractTrainer):
     def train_model(self, trial, config, model_class):
         training_config = config["training_config"]
         model_config = config["model_config"]
+
+        if model_class==SupportVectorMachine:
+            X_train, y_train = self._dataset_to_numpy(self.trainset)
+            X_val, y_val = self._dataset_to_numpy(self.valset)
+
+            clf = make_pipeline(
+                StandardScaler(),
+                SupportVectorMachine(
+                    kernel=model_config.get("kernel", "rbf"),
+                    C=model_config.get("C", 1.0),
+                    gamma=model_config.get("gamma", "scale"),
+                    degree=model_config.get("degree", 3),
+                    coef0=model_config.get("coef0", 0.0),
+                )
+            )
+
+            clf.fit(X_train, y_train)
+            val_preds = clf.predict(X_val)
+            accuracy = accuracy_score(y_val, val_preds)
+
+            trial.report(accuracy, 0)
+            if trial.should_prune():
+                raise optuna.TrialPruned()
+
+            return accuracy
+
 
         net = model_class(model_config)
         device = training_config["device"]
@@ -42,16 +72,6 @@ class HyperparameterTrainer(AbstractTrainer):
         else:
             raise TypeError(f"Assigned {training_config["optimizer"]["name"]} is not implemented in hyperparameter search")
 
-        # checkpoint = tune.get_checkpoint()
-        # if checkpoint:
-        #     with checkpoint.as_directory() as checkpoint_dir:
-        #         checkpoint_path = Path(checkpoint_dir) / "checkpoint.pt"
-        #         checkpoint_state = torch.load(checkpoint_path)
-        #         start_epoch = checkpoint_state["epoch"]
-        #         net.load_state_dict(checkpoint_state["net_state_dict"])
-        #         optimizer.load_state_dict(checkpoint_state["optimizer_state_dict"])
-        # else:
-        #     start_epoch = 0
 
         trainloader = DataLoader(
             self.trainset,
@@ -174,38 +194,65 @@ class HyperparameterTrainer(AbstractTrainer):
         return accuracy
 
 
-    def test_model(self, net, device="cpu"):
-        testloader = DataLoader(self.testset, batch_size=32, shuffle=True)
+    def _dataset_to_numpy(self, dataset):
+        loader = DataLoader(dataset, batch_size=len(dataset), shuffle=False)
+        X, y = next(iter(loader))
+        X = X.detach().cpu().numpy().astype(np.float64, copy=False)
+        y = y.detach().cpu().numpy().astype(np.int64, copy=False)
+        return X, y
 
-        net.eval()
+
+    def test_model(self, model, device="cpu", num_workers=2):
+
+        if isinstance(model, (SupportVectorMachine, Pipeline)):
+            X_test, y_test = self._dataset_to_numpy(self.testset)
+            preds = model.predict(X_test)
+            return self.calculate_metrics(y_test, preds)
+
+        model = model.to(device)
+        testloader = DataLoader(
+            self.testset,
+            num_workers=num_workers
+        )
+
+        model.eval()
         all_preds, all_labels = [], []
         with torch.no_grad():
             for inputs, labels in testloader:
                 inputs, labels = inputs.to(device), labels.to(device)
-                outputs = net(inputs)
-                if isinstance(net, QuantumNeuralNetwork):
-                    preds = 0 if outputs < 0 else 1
-                else:
+                outputs = model(inputs)
+                if isinstance(model, QuantumNeuralNetwork):
+                    preds = (outputs >= 0).long()
+                elif isinstance(model, ClassicalNeuralNetwork):
                     _, preds = torch.max(outputs.data, 1)
 
                 all_preds.append(preds)
                 all_labels.append(labels)
 
-
         all_preds = torch.cat(all_preds)
         all_labels = torch.cat(all_labels)
-        results = self.calculate_metrics(all_labels,all_preds)
+        metrics = self.calculate_metrics(all_labels,all_preds)
 
-        return results
+        return metrics
 
     def calculate_metrics(self, labels, predictions):
+        if torch.is_tensor(labels):
+            labels = labels.detach().cpu().numpy()
+        else:
+            labels = np.asarray(labels)
+
+        if torch.is_tensor(predictions):
+            predictions = predictions.detach().cpu().numpy()
+        else:
+            predictions = np.asarray(predictions)
+
 
         tn, fp, fn, tp = confusion_matrix(labels, predictions).ravel()
         accuracy = accuracy_score(labels, predictions)
         balanced_acc = balanced_accuracy_score(labels, predictions)
-        precision = precision_score(labels, predictions, zero_division=0)
-        recall = recall_score(labels, predictions, zero_division=0)
-        f1 = f1_score(labels, predictions, zero_division=0)
+        precision = precision_score(labels, predictions, zero_division=0, average='macro')
+        recall = recall_score(labels, predictions, zero_division=0, average='macro')
+        f1 = f1_score(labels, predictions, zero_division=0, average='macro')
 
         return {
             'accuracy': accuracy,

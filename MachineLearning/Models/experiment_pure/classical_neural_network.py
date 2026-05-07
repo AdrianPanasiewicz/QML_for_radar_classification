@@ -16,7 +16,7 @@ class ClassicalNeuralNetwork(nn.Module):
 		for _ in range(self.init_kwargs['layers']):
 			layers_list.append(nn.Linear(self.init_kwargs['neurons_per_layer'], self.init_kwargs['neurons_per_layer']))
 			layers_list.append(nn.LeakyReLU(0.01))
-			layers_list.append(nn.Dropout(model_config["dropout_rate"]))
+			layers_list.append(nn.Dropout(self.init_kwargs["dropout_rate"]))
 
 		layers_list.append(nn.Linear(self.init_kwargs['neurons_per_layer'], 2))
 		self.linear_relu_stack = nn.Sequential(*layers_list)
