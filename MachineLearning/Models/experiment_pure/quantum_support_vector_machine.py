@@ -1,21 +1,15 @@
-import numpy as np
-import pennylane as qml
 from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 
 class QuantumSupportVectorMachine(BaseEstimator, ClassifierMixin):
     def __init__(self,C=1.0, class_weight=None, encoding=None):
         self.C = C
-        self.class_weight = class_weight
         self.encoding = encoding
 
     def fit(self, X, y):
         self.model_ = SVC(
             C=self.C,
-            kernel='precomputed',
-            class_weight=self.class_weight
+            kernel='precomputed'
         )
         self.model_.fit(X, y)
         return self

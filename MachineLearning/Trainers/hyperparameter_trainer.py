@@ -1,19 +1,14 @@
 from tqdm import tqdm
-from sklearn.svm import SVC
-from sklearn.pipeline import Pipeline, make_pipeline
-from sklearn.preprocessing import StandardScaler
-from sklearn.base import BaseEstimator
+from sklearn.pipeline import Pipeline
 import pennylane as qml
 import numpy as np
 import torch
-import os
+import pickle
 import gc
-from torch import nn
 from torch.utils.data import DataLoader
 from torch.optim import SGD, Adam
-from ray import tune
+from pathlib import Path
 import optuna
-from ray.tune import Checkpoint
 from MachineLearning.Trainers.abstract_trainer import AbstractTrainer
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 from MachineLearning.Models.experiment_pure.quantum_neural_network import QuantumNeuralNetwork
@@ -30,25 +25,20 @@ class HyperparameterTrainer(AbstractTrainer):
         training_config = config["training_config"]
         model_config = config["model_config"]
 
-        if model_class in (SupportVectorMachine, QuantumSupportVectorMachine):
+        if model_class == SupportVectorMachine:
+
             X_train, y_train = self._dataset_to_numpy(self.trainset)
             X_val, y_val = self._dataset_to_numpy(self.valset)
+            X_test, y_test = self._dataset_to_numpy(self.testset)
 
-            if model_class == SupportVectorMachine:
-                clf = model_class(
-                        kernel=model_config.get("kernel", "rbf"),
-                        C=model_config.get("C", 1.0),
-                        gamma=model_config.get("gamma", "scale"),
-                        degree=model_config.get("degree", 3),
-                        coef0=model_config.get("coef0", 0.0),
-                )
-            elif model_class == QuantumSupportVectorMachine:
-                clf = model_class(
-                    config=model_config,
+            clf = model_class(
+                    kernel=model_config.get("kernel", "rbf"),
                     C=model_config.get("C", 1.0),
-                    kernel=model_config.get("kernel", "quantum"),
-                    use_scaler=False
-                )
+                    gamma=model_config.get("gamma", "scale"),
+                    degree=model_config.get("degree", 3),
+                    coef0=model_config.get("coef0", 0.0),
+            )
+
 
             clf.fit(X_train, y_train)
             val_preds = clf.predict(X_val)
@@ -60,6 +50,33 @@ class HyperparameterTrainer(AbstractTrainer):
 
             return accuracy
 
+        elif model_class == QuantumSupportVectorMachine:
+
+            path = "../Results/Experiment_5/kernels"
+            kernels = self.load_kernels(path)
+
+            K_train = kernels[("train",model_config.get("encoding", 'angle'))]
+            K_val = kernels[("validation", model_config.get("encoding", 'angle'))]
+            K_test = kernels[("test",model_config.get("encoding", 'angle'))]
+
+            _, y_train = self._dataset_to_numpy(self.trainset)
+            _, y_val = self._dataset_to_numpy(self.valset)
+            _, y_test = self._dataset_to_numpy(self.testset)
+
+            clf = model_class(
+                C=model_config.get("C", 1.0),
+                encoding=model_config.get("encoding", 'angle')
+            )
+
+            clf.fit(K_train, y_train)
+            # val_preds = clf.predict(K_val)
+            accuracy = clf.score(K_val, y_val)
+
+            trial.report(accuracy, 0)
+            if trial.should_prune():
+                raise optuna.TrialPruned()
+
+            return accuracy
 
         net = model_class(model_config)
         device = training_config["device"]
@@ -246,6 +263,15 @@ class HyperparameterTrainer(AbstractTrainer):
         kernel = {(kernel_type, encoding_name) : K}
 
         return kernel
+
+    def load_kernels(self, path):
+        directory = Path(path)
+        kernels = {}
+        for file in directory.iterdir():
+            with open(file, "rb") as f:
+                kernel_dict = pickle.load(f)
+            kernels.update(kernel_dict)
+        return kernels
 
     def _dataset_to_numpy(self, dataset):
         loader = DataLoader(dataset, batch_size=len(dataset), shuffle=False)
