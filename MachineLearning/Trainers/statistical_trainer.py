@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pickle
 import os
 import gc
 import torch
@@ -74,14 +75,45 @@ class StatisticalTrainer(AbstractTrainer):
             val_metrics = self.calculate_metrics(y_val, val_preds)
 
             metrics_dictionary["training_data"].append({
-                "accuracy": [100 * val_metrics["accuracy"]],
-                "validation_loss": [None]
+                "accuracy": [100 * val_metrics["accuracy"]]
             })
 
             metrics = self.test_model(clf)
             metrics_dictionary["testing_data"].append(metrics)
 
             return clf, metrics_dictionary
+
+        elif model_class == QuantumSupportVectorMachine:
+
+            path = "../Results/Experiment_5/kernels"
+            kernels = self.load_kernels(path)
+
+            K_train = kernels[("train",model_config.get("encoding", 'angle'))]
+            K_val = kernels[("validation", model_config.get("encoding", 'angle'))]
+            K_test = kernels[("test",model_config.get("encoding", 'angle'))]
+
+            _, y_train = self._dataset_to_numpy(self.trainset)
+            _, y_val = self._dataset_to_numpy(self.valset)
+            _, y_test = self._dataset_to_numpy(self.testset)
+
+            clf = model_class(
+                C=model_config.get("C", 1.0),
+                encoding=model_config.get("encoding", 'angle')
+            )
+
+            clf.fit(K_train, y_train)
+
+            accuracy = clf.score(K_val, y_val)
+            metrics_dictionary["training_data"].append({
+                "accuracy": [100 * accuracy],
+            })
+
+            preds = clf.predict(K_test)
+            metrics = self.calculate_metrics(y_test, preds)
+            metrics_dictionary["testing_data"].append(metrics)
+
+            return clf, metrics_dictionary
+
 
         trainloader = DataLoader(self.trainset,
                                  batch_size=int(training_config["batch_size"]),
@@ -201,6 +233,15 @@ class StatisticalTrainer(AbstractTrainer):
         del valloader
 
         return net, metrics_dictionary
+
+    def load_kernels(self, path):
+        directory = Path(path)
+        kernels = {}
+        for file in directory.iterdir():
+            with open(file, "rb") as f:
+                kernel_dict = pickle.load(f)
+            kernels.update(kernel_dict)
+        return kernels
 
     def _dataset_to_numpy(self, dataset):
         loader = DataLoader(dataset, batch_size=len(dataset), shuffle=False)

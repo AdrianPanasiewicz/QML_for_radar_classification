@@ -283,9 +283,19 @@ class HyperparameterTrainer(AbstractTrainer):
 
     def test_model(self, model, device="cpu", num_workers=2):
 
-        if isinstance(model, (SupportVectorMachine, QuantumSupportVectorMachine, Pipeline)):
+        if isinstance(model, (SupportVectorMachine, Pipeline)):
             X_test, y_test = self._dataset_to_numpy(self.testset)
             preds = model.predict(X_test)
+            return self.calculate_metrics(y_test, preds)
+
+        if isinstance(model, QuantumSupportVectorMachine):
+            path = "../Results/Experiment_5/kernels"
+            kernels = self.load_kernels(path)
+
+            K_test = kernels[("test",model.encoding)]
+            _, y_test = self._dataset_to_numpy(self.testset)
+            preds = model.predict(K_test)
+
             return self.calculate_metrics(y_test, preds)
 
         model = model.to(device)

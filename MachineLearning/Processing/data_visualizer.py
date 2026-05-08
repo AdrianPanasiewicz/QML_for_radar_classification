@@ -109,23 +109,40 @@ class DataVisualizer:
 
         return fig, ax
 
-    def plot_confusion_matrix(self, metrics_dict, significant_digits=2):
+    def plot_confusion_matrix(self, metrics_dict, significant_digits=2, include_std=True):
         labels = self.desc_dictionary["confusion_matrix"]
-        confusion_tensor = {
-            key : torch.tensor([run["confusion_matrix"][key] for run in metrics_dict["testing_data"]], dtype=torch.float32)
-            for key in ("TP", "TN", "FP", "FN")
-        }
-        stats = {key : self.calculate_statistics(confusion_tensor[key]) for key in ("TP", "TN", "FP", "FN")}
 
-        mean_matrix = torch.tensor([
-            [stats["TN"][0], stats["FP"][0]],
-            [stats["FN"][0], stats["TP"][0]]
-        ])
+        if include_std:
+            confusion_tensor = {
+                key: torch.tensor(
+                    [run["confusion_matrix"][key] for run in metrics_dict["testing_data"]],
+                    dtype=torch.float32
+                )
+                for key in ("TP", "TN", "FP", "FN")
+            }
+            stats = {
+                key: self.calculate_statistics(confusion_tensor[key])
+                for key in ("TP", "TN", "FP", "FN")
+            }
 
-        std_matrix = torch.tensor([
-            [stats["TN"][1], stats["FP"][1]],
-            [stats["FN"][1], stats["TP"][1]]
-        ])
+            mean_matrix = torch.tensor([
+                [stats["TN"][0], stats["FP"][0]],
+                [stats["FN"][0], stats["TP"][0]]
+            ], dtype=torch.float32)
+
+            std_matrix = torch.tensor([
+                [stats["TN"][1], stats["FP"][1]],
+                [stats["FN"][1], stats["TP"][1]]
+            ], dtype=torch.float32)
+        else:
+            cm = metrics_dict['testing_data'][0]["confusion_matrix"]
+
+            mean_matrix = torch.tensor([
+                [cm["TN"], cm["FP"]],
+                [cm["FN"], cm["TP"]]
+            ], dtype=torch.float32)
+
+            std_matrix = torch.zeros_like(mean_matrix)
 
         fig, ax = plt.subplots(figsize=(6, 5))
         im = ax.imshow(mean_matrix.numpy(), cmap="Blues")
@@ -149,10 +166,21 @@ class DataVisualizer:
 
                 text_color = "white" if value > threshold else "black"
 
+                if include_std:
+                    text = (
+                        f"{percentage:.1f}% ± {percentage_std:.1f}%\n"
+                        f"({value:.{significant_digits}f} ± {std:.{significant_digits}f})"
+                    )
+                else:
+                    text = (
+                        f"{percentage:.1f}%\n"
+                        f"({value:.{significant_digits}f})"
+                    )
+
                 ax.text(
                     j,
                     i,
-                    f"{percentage:.1f}% ± {percentage_std:.1f}%\n({value:.{significant_digits}f} ± {std:.{significant_digits}f})",
+                    text,
                     ha="center",
                     va="center",
                     color=text_color,
