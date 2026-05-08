@@ -2,6 +2,8 @@ from tqdm import tqdm
 from sklearn.svm import SVC
 from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.base import BaseEstimator
+import pennylane as qml
 import numpy as np
 import torch
 import os
@@ -17,6 +19,7 @@ from sklearn.metrics import accuracy_score, balanced_accuracy_score, precision_s
 from MachineLearning.Models.experiment_pure.quantum_neural_network import QuantumNeuralNetwork
 from MachineLearning.Models.experiment_pure.classical_neural_network import ClassicalNeuralNetwork
 from MachineLearning.Models.experiment_pure.classical_support_vector_machine import SupportVectorMachine
+from MachineLearning.Models.experiment_pure.quantum_support_vector_machine import QuantumSupportVectorMachine
 
 class HyperparameterTrainer(AbstractTrainer):
     def __init__(self, training_path, validating_path, testing_path , criterion):
@@ -26,20 +29,25 @@ class HyperparameterTrainer(AbstractTrainer):
         training_config = config["training_config"]
         model_config = config["model_config"]
 
-        if model_class==SupportVectorMachine:
+        if model_class in (SupportVectorMachine, QuantumSupportVectorMachine):
             X_train, y_train = self._dataset_to_numpy(self.trainset)
             X_val, y_val = self._dataset_to_numpy(self.valset)
 
-            clf = make_pipeline(
-                StandardScaler(),
-                SupportVectorMachine(
-                    kernel=model_config.get("kernel", "rbf"),
-                    C=model_config.get("C", 1.0),
-                    gamma=model_config.get("gamma", "scale"),
-                    degree=model_config.get("degree", 3),
-                    coef0=model_config.get("coef0", 0.0),
+            if model_class == SupportVectorMachine:
+                clf = model_class(
+                        kernel=model_config.get("kernel", "rbf"),
+                        C=model_config.get("C", 1.0),
+                        gamma=model_config.get("gamma", "scale"),
+                        degree=model_config.get("degree", 3),
+                        coef0=model_config.get("coef0", 0.0),
                 )
-            )
+            elif model_class == QuantumSupportVectorMachine:
+                clf = model_class(
+                    config=model_config,
+                    C=model_config.get("C", 1.0),
+                    kernel=model_config.get("kernel", "quantum"),
+                    use_scaler=False
+                )
 
             clf.fit(X_train, y_train)
             val_preds = clf.predict(X_val)
@@ -193,6 +201,45 @@ class HyperparameterTrainer(AbstractTrainer):
         
         return accuracy
 
+    def precompute_kernels(self, n_qubits=None, only_test=False):
+        X_train, _ = self._dataset_to_numpy(self.trainset)
+        X_val, _ = self._dataset_to_numpy(self.valset)
+        X_test, _ = self._dataset_to_numpy(self.testset)
+
+        if n_qubits is None:
+            n_qubits = X_train.shape[1]
+
+        def angle_encoding(x):
+            qml.AngleEmbedding(features=x, wires=range(n_qubits), rotation='X')
+
+        def amplitude_embedding(x):
+            qml.AmplitudeEmbedding(features=x, wires=range(n_qubits), pad_with=0.0, normalize=True)
+
+        encodings = {"angle": angle_encoding} #, "amplitude": amplitude_embedding}
+        if not only_test:
+            encodings = {"angle": angle_encoding, "amplitude": amplitude_embedding}
+        kernels = {}
+
+        dev = qml.device("default.qubit", wires=n_qubits)
+
+        for name, enc in encodings.items():
+            @qml.qnode(dev)
+            def kernel_qnode(x1, x2):
+                enc(x1)
+                qml.adjoint(enc)(x2)
+                return qml.expval(qml.Projector([0] * n_qubits, wires=range(n_qubits)))
+
+            if not only_test:
+                K_train = qml.kernels.square_kernel_matrix(X_train, kernel_qnode)
+                K_val = qml.kernels.kernel_matrix(X_val, X_train, kernel_qnode)
+
+            K_test = qml.kernels.kernel_matrix(X_test, X_train, kernel_qnode)
+
+            kernels[name] = {"test": K_test}
+            if not only_test:
+                kernels[name] = {"train": K_train, "val": K_val, "test": K_test}
+
+        return kernels
 
     def _dataset_to_numpy(self, dataset):
         loader = DataLoader(dataset, batch_size=len(dataset), shuffle=False)
@@ -204,7 +251,7 @@ class HyperparameterTrainer(AbstractTrainer):
 
     def test_model(self, model, device="cpu", num_workers=2):
 
-        if isinstance(model, (SupportVectorMachine, Pipeline)):
+        if isinstance(model, (SupportVectorMachine, QuantumSupportVectorMachine, Pipeline)):
             X_test, y_test = self._dataset_to_numpy(self.testset)
             preds = model.predict(X_test)
             return self.calculate_metrics(y_test, preds)

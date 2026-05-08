@@ -8,6 +8,7 @@ class SupportVectorMachine(BaseEstimator, ClassifierMixin):
     def __init__(
         self,
         *,
+        config=None,
         C=1.0,
         kernel="rbf",
         degree=3,
@@ -43,6 +44,7 @@ class SupportVectorMachine(BaseEstimator, ClassifierMixin):
         self.random_state = random_state
         self.use_scaler = use_scaler
         self.kernel_callable = kernel_callable
+        self.model_name = self.__class__.__name__
 
     def _resolve_kernel(self):
         if self.kernel == "callable":
