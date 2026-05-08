@@ -20,6 +20,7 @@ from MachineLearning.Models.experiment_pure.quantum_neural_network import Quantu
 from MachineLearning.Models.experiment_pure.classical_neural_network import ClassicalNeuralNetwork
 from MachineLearning.Models.experiment_pure.classical_support_vector_machine import SupportVectorMachine
 from MachineLearning.Models.experiment_pure.quantum_support_vector_machine import QuantumSupportVectorMachine
+from MachineLearning.Trainers.utils import square_kernel_matrix, kernel_matrix
 
 class HyperparameterTrainer(AbstractTrainer):
     def __init__(self, training_path, validating_path, testing_path , criterion):
@@ -201,7 +202,7 @@ class HyperparameterTrainer(AbstractTrainer):
         
         return accuracy
 
-    def precompute_kernels(self, n_qubits=None, only_test=False):
+    def precompute_kernel(self, kernel_type, encoding_name, n_qubits=None):
         X_train, _ = self._dataset_to_numpy(self.trainset)
         X_val, _ = self._dataset_to_numpy(self.valset)
         X_test, _ = self._dataset_to_numpy(self.testset)
@@ -215,31 +216,36 @@ class HyperparameterTrainer(AbstractTrainer):
         def amplitude_embedding(x):
             qml.AmplitudeEmbedding(features=x, wires=range(n_qubits), pad_with=0.0, normalize=True)
 
-        encodings = {"angle": angle_encoding} #, "amplitude": amplitude_embedding}
-        if not only_test:
-            encodings = {"angle": angle_encoding, "amplitude": amplitude_embedding}
-        kernels = {}
+        encodings = {
+            "angle": angle_encoding,
+            "amplitude": amplitude_embedding,
+        }
 
+        assert kernel_type in ("train", "validation", "test"), f"{kernel_type} not in ('train', 'validation', 'test'). Please select kernel type from one of those."
+        assert encoding_name in encodings.keys(), f"{encoding_name} type does not exits. Please select encoding type from the following f{encodings.keys()}"
+
+        enc = encodings[encoding_name]
         dev = qml.device("default.qubit", wires=n_qubits)
 
-        for name, enc in encodings.items():
-            @qml.qnode(dev)
-            def kernel_qnode(x1, x2):
-                enc(x1)
-                qml.adjoint(enc)(x2)
-                return qml.expval(qml.Projector([0] * n_qubits, wires=range(n_qubits)))
+        @qml.qnode(dev)
+        def kernel_qnode(x1, x2):
+            enc(x1)
+            qml.adjoint(enc)(x2)
+            return qml.expval(qml.Projector([0] * n_qubits, wires=range(n_qubits)))
 
-            if not only_test:
-                K_train = qml.kernels.square_kernel_matrix(X_train, kernel_qnode)
-                K_val = qml.kernels.kernel_matrix(X_val, X_train, kernel_qnode)
+        match kernel_type:
+            case "train":
+                K = square_kernel_matrix(X_train, kernel_qnode)
+            case "validation":
+                K = kernel_matrix(X_val, X_train, kernel_qnode)
+            case "test":
+                K = kernel_matrix(X_test, X_train, kernel_qnode)
+            case _:
+                raise NotImplementedError(f"Kernel construction for f{encoding_name} and f{kernel_type} is not implemented.")
 
-            K_test = qml.kernels.kernel_matrix(X_test, X_train, kernel_qnode)
+        kernel = {(kernel_type, encoding_name) : K}
 
-            kernels[name] = {"test": K_test}
-            if not only_test:
-                kernels[name] = {"train": K_train, "val": K_val, "test": K_test}
-
-        return kernels
+        return kernel
 
     def _dataset_to_numpy(self, dataset):
         loader = DataLoader(dataset, batch_size=len(dataset), shuffle=False)
