@@ -77,7 +77,7 @@ dataset_gen.append_data_requests(requests)
 dataset_gen.generate_signal_data(stft_form=False)  # Set to True for frequency domain
 ```
 
-### 2. Hyperparameter Tuning with Optuna
+### 2. Hyperparameter Tuning for CNN and QNN
 ```python
 import optuna
 from torch import nn
