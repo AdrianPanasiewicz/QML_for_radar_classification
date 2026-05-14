@@ -20,8 +20,10 @@ The `SyntheticDatasetGenerator` handles:
 ### Classification Models
 The following classifiers are implemented and evaluated:
 - **Classical Neural Network (CNN / DNN)** — PyTorch-based models for baseline classification.
+- **Classical Support Vector Machine (SVM)** — Scikit-learn estimator wrapper incorporating standard scaling and configurable kernels.
 - **Quantum Neural Network (QNN)** — Hybrid models built with PennyLane/Qiskit, supporting varying ansatz designs (basic, entangling, random) and encoding schemes (angle, amplitude).
-- **Quantum Support Vector Machine (QSVM)** *(Planned/WIP)*
+- **Quantum Support Vector Machine (QSVM)** — Scikit-learn based implementation utilizing precomputed quantum kernels and flexible state encoding.
+
 
 ### Training, Tuning & Visualization
 The training pipeline features:
@@ -114,7 +116,55 @@ study = optuna.create_study(direction="maximize")
 study.optimize(objective, n_trials=50)
 ```
 
-### 3. Statistical Evaluation & Visualization
+### 3. Hyperparameter Tuning for SVM and QSVM
+```python
+import optuna
+import torch
+import pickle
+from pathlib import Path
+from torch import nn
+from MachineLearning.Trainers.hyperparameter_trainer import HyperparameterTrainer
+from MachineLearning.Models.experiment_pure.support_vector_machine import SupportVectorMachine
+from MachineLearning.Models.experiment_pure.quantum_support_vector_machine import QuantumSupportVectorMachine
+
+PROJECT_ROOT = Path().cwd().parent
+training_path = PROJECT_ROOT / "Data" / "Datasets" / "time_domain" / "training_dataset.pkl"
+validating_path = PROJECT_ROOT / "Data" / "Datasets" / "time_domain" / "validating_dataset.pkl"
+testing_path = PROJECT_ROOT / "Data" / "Datasets" / "time_domain" / "testing_dataset.pkl"
+
+trainer = HyperparameterTrainer(training_path, validating_path, testing_path, criterion=nn.BCEWithLogitsLoss())
+
+def objective_svm(trial):
+    kernel = trial.suggest_categorical("kernel", ["linear", "rbf", "poly", "sigmoid"])
+    
+    model_config = {
+        "kernel": kernel,
+        "C": trial.suggest_float("C", 1e-3, 1e3, log=True),
+        "gamma": "scale" if kernel == "linear" else trial.suggest_float("gamma", 1e-4, 10, log=True),
+        "degree": trial.suggest_int("degree", 2, 5) if kernel == "poly" else 3,
+        "coef0": trial.suggest_float("coef0", 0.0, 1.0) if kernel in ["poly", "sigmoid"] else 0.0,
+    }
+
+    training_config = {
+        "device": "cuda" if torch.cuda.is_available() else "cpu"
+    }
+
+    config = {
+        "model_config": model_config,
+        "training_config": training_config,
+    }
+
+    return trainer.train_model(trial, config, SupportVectorMachine)
+
+pruner = optuna.pruners.HyperbandPruner(min_resource=5, reduction_factor=2)
+study_svm = optuna.create_study(direction="maximize", pruner=pruner)
+study_svm.optimize(objective_svm, n_trials=100)
+
+with open("../Results/Experiment_5/svm_stats.pkl", "wb") as f:
+    pickle.dump(study_svm, f)
+```
+
+### 4. Statistical Evaluation & Visualization
 Once the best hyperparameters are found, use the `StatisticalTrainer` to train the model multiple times. This allows you to evaluate stability and generate visuals like confusion matrices and loss curves.
 
 ```python
